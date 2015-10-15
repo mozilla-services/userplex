@@ -1,0 +1,53 @@
+# Sample UserPlex configuration file
+
+ldap:
+    uri: "ldap://ldap.example.net/dc=example,dc=net"
+    username: bobkelso
+    password: donut
+    # set to false if you use self-signed certs or unknown CAs (bad!)
+    insecure: false
+    # only used if uri isn't ldaps (TLS)
+    starttls: true
+
+ssh:
+    # location of where the public keys are written
+    # {ldap:uid} means the "uid" attribute is used to create
+    # a file for each user in the groups listed above
+    - location: /data/puppet/modules/users/files/{ldap:uid}/.ssh/authorized_keys
+    # puppet::users have one authorized_key file per user that contains all
+    # the keys listed in the user's sshPublicKey attribute
+      ldapgroups:
+        - sysadmins
+        - developers
+        - devssh
+    # root is a special group that only has one authorized_keys file
+    # and all the keys of all the group members are added to it
+    - location: /data/puppet/modules/users/files/root/.ssh/authorized_keys
+      ldapgroups:
+        - sysadmins
+
+aws:
+    # manage users in DEV IAM
+    - profile: aws_dev
+      ldapgroups:
+        - sysadmins
+        - developers
+      assignroles:
+        - ldap_managed
+      accesskey: AKIAnnnn
+      secretkey: YOLOMAN
+
+    # manage users in stage IAM
+    - profile: aws_prod
+      ldapgroups:
+        - sysadmins
+      assignroles:
+        - ldap_managed
+      accesskey: AKIAbbbb
+      secretkey: YOLOMAN
+
+datadog:
+    - ldapgroups:
+        - sysadmins
+      apikey: 9775a026f1ca7d1c6c5af9d94d9595a4
+      appkey: 87ce4a24youcouldntpossiblythinkthisisakey
