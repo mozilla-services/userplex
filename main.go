@@ -7,7 +7,12 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"strings"
+
+	// modules
+	"github.com/mozilla-services/userplex/modules"
+	_ "github.com/mozilla-services/userplex/modules/authorizedkeys"
+	//_ "github.com/mozilla-services/userplex/modules/aws"
+	//_ "github.com/mozilla-services/userplex/modules/datadog"
 
 	"github.com/mozilla-services/mozldap"
 	"gopkg.in/yaml.v2"
@@ -18,19 +23,7 @@ type conf struct {
 		Uri, Username, Password string
 		Insecure, Starttls      bool
 	}
-	SSH []struct {
-		Location   string
-		LdapGroups []string
-	}
-	AWS []struct {
-		Profile, AccessKey, SecretKey string
-		LdapGroups                    []string
-		Assign_Roles                  []string
-	}
-	Datadog []struct {
-		LdapGroups     []string
-		ApiKey, AppKey string
-	}
+	Modules []modules.Configuration
 }
 
 func main() {
@@ -48,6 +41,7 @@ func main() {
 	var dryrun = flag.Bool("dry", false, "Dry run, don't create/delete, just show stuff")
 	flag.Parse()
 
+	// load the local configuration file
 	fd, err := ioutil.ReadFile(*config)
 	if err != nil {
 		log.Fatal(err)
@@ -56,32 +50,37 @@ func main() {
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
-	cli, err := mozldap.NewClient(conf.Ldap.Uri, conf.Ldap.Username, conf.Ldap.Password,
-		&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure}, conf.Ldap.Starttls)
+
+	// instanciate an ldap client
+	cli, err := mozldap.NewClient(
+		conf.Ldap.Uri,
+		conf.Ldap.Username,
+		conf.Ldap.Password,
+		&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure},
+		conf.Ldap.Starttls)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("connected %s on %s:%d, tls:%v starttls:%v\n",
-		cli.BaseDN, cli.Host, cli.Port, cli.UseTLS, cli.UseStartTLS)
+	log.Printf("connected %s on %s:%d, tls:%v starttls:%v\n", cli.BaseDN, cli.Host, cli.Port, cli.UseTLS, cli.UseStartTLS)
 
-	for _, ssh := range conf.SSH {
-		fmt.Println(ssh.Location)
-		users, err := cli.GetUsersInGroups(ssh.LdapGroups)
-		if err != nil {
-			log.Fatal(err)
-		}
-		for _, user := range users {
-			fmt.Printf("\t%s\n", user)
-			pubkeys, err := cli.GetUserSSHPublicKeys(strings.Split(user, ",")[0])
-			if err != nil {
-				log.Fatal(err)
-			}
-			for _, pkey := range pubkeys {
-				fmt.Printf("\t\t%s\n", pkey)
-			}
-		}
+	// store the value of dryrun and the ldap client
+	// in the configuration of each module
+	for i := range conf.Modules {
+		conf.Modules[i].DryRun = *dryrun
+		conf.Modules[i].LdapCli = cli
 	}
-	if *dryrun {
-		os.Exit(0)
+
+	// run each module in the order it appears in the configuration
+	for _, modconf := range conf.Modules {
+		if _, ok := modules.Available[modconf.Name]; !ok {
+			log.Printf("[warning] %s module not registered, skipping it", modconf.Name)
+			continue
+		}
+		log.Println("running configuration for module", modconf.Name)
+		run := modules.Available[modconf.Name].NewRun(modconf)
+		err = run.Run()
+		if err != nil {
+			log.Printf("[error] %s module failed with error: %v", modconf.Name, err)
+		}
 	}
 }

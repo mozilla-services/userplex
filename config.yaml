@@ -9,45 +9,54 @@ ldap:
     # only used if uri isn't ldaps (TLS)
     starttls: true
 
-ssh:
-    # location of where the public keys are written
-    # {ldap:uid} means the "uid" attribute is used to create
-    # a file for each user in the groups listed above
-    - location: /data/puppet/modules/users/files/{ldap:uid}/.ssh/authorized_keys
-    # puppet::users have one authorized_key file per user that contains all
-    # the keys listed in the user's sshPublicKey attribute
+modules:
+
+    # authorizedkeys is a module that pull the public keys of a user and
+    # writes them down into the destination
+    - name: authorizedkeys
       ldapgroups:
         - sysadmins
         - developers
         - devssh
-    # root is a special group that only has one authorized_keys file
-    # and all the keys of all the group members are added to it
-    - location: /data/puppet/modules/users/files/root/.ssh/authorized_keys
+      create: true
+      delete: true
+      parameters:
+          # destination is where the public keys are written
+          # {ldap:uid} means the "uid" attribute is used to create
+          # a file for each user in the groups listed above
+          destination: /data/puppet/modules/users/files/{ldap:uid}/.ssh/authorized_keys
+
+    - name: authorizedkeys
       ldapgroups:
         - sysadmins
+      create: true
+      delete: true
+      parameters:
+          # root is a special group that only has one authorized_keys file
+          # and all the keys of all the group members are added to it
+          destination: /data/puppet/modules/users/files/root/.ssh/authorized_keys
 
-aws:
-    # manage users in DEV IAM
-    - profile: aws_dev
+    # aws_iam manage users in AWS
+    - name: aws
       ldapgroups:
         - sysadmins
         - developers
-      assignroles:
-        - ldap_managed
-      accesskey: AKIAnnnn
-      secretkey: YOLOMAN
+      # create users that exist in ldap and not in aws. also makes sure that
+      # users are assigns to their roles, even if removed manually.
+      create: true
+      # delete aws users that are in the roles but no longer in ldap
+      delete: true
+      parameters:
+          assignroles:
+            - ldap_managed
+      credentials:
+          accesskey: AKIAnnnn
+          secretkey: YOLOMAN
 
-    # manage users in stage IAM
-    - profile: aws_prod
+    # datadog invites users to datadog
+    - name: datadog
       ldapgroups:
         - sysadmins
-      assignroles:
-        - ldap_managed
-      accesskey: AKIAbbbb
-      secretkey: YOLOMAN
-
-datadog:
-    - ldapgroups:
-        - sysadmins
-      apikey: 9775a026f1ca7d1c6c5af9d94d9595a4
-      appkey: 87ce4a24youcouldntpossiblythinkthisisakey
+      credentials:
+          apikey: 9775a026f1ca7d1c6c5af9d94d9595a4
+          appkey: 87ce4a24youcouldntpossiblythinkthisisakey
