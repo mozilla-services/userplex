@@ -1,12 +1,10 @@
-Userplex
---------
+# Userplex
+
 Propagate users from LDAP to Puppet, AWS, Github, Datadog, ...
 
-Configuration
--------------
+## Configuration
 
-Ldap
-~~~~
+### Ldap
 
 How to connect to the LDAP source.
 * `uri` is the connection string that uses the format
@@ -28,8 +26,7 @@ ldap:
     starttls: true
 ```
 
-Modules
-~~~~~~~
+### Modules
 
 Each module is documented in its own modules/<modulename> directory.
 
@@ -60,8 +57,8 @@ modules:
             - ldap_managed
 ```
 
-UID Maps
-~~~~~~~~
+### UID Maps
+
 By default, `userplex` will create users based on their LDAP `uid` attribute. In
 some instance, you may want to use a different login name, which is where UID
 Maps come in handy.
@@ -85,10 +82,8 @@ modules:
 The map above will translate the ldap uids `bkelso` and `tanderson` into `bob`
 and `neo`, and then create the authorizedkeys files with the translated uids.
 
-License
--------
+## License
 Mozilla Public License 2.0
 
-Authors
--------
+## Authors
 Julien Vehent <ulfr@mozilla.com>
