@@ -23,6 +23,11 @@ type conf struct {
 		Uri, Username, Password string
 		Insecure, Starttls      bool
 	}
+	UidMap []struct {
+		LdapUid string
+		UsedUid string
+	}
+
 	Modules []modules.Configuration
 }
 

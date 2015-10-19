@@ -9,12 +9,18 @@ import (
 type Configuration struct {
 	Name        string         `yaml:"name",json:"name"`
 	LdapGroups  []string       `yaml:"ldapgroups",json:"ldapgroups"`
+	UidMap      []umap         `yaml:"uidmap",json:"uidmap"`
 	Create      bool           `yaml:"create",json:"create"`
 	Delete      bool           `yaml:"delete",json:"delete"`
 	Credentials interface{}    `yaml:"credentials",json:"credentials"`
 	Parameters  interface{}    `yaml:"parameters",json:"parameters"`
 	DryRun      bool           `yaml:"dryrun",json:"dryrun"`
 	LdapCli     mozldap.Client `yaml:"-",json:"-"`
+}
+
+type umap struct {
+	LdapUid string `yaml:"ldapuid",json:"ldapuid"`
+	UsedUid string `yaml:"useduid",json:"useduid"`
 }
 
 // A module implements this interface
