@@ -1,3 +1,8 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+//
+// Contributor: Julien Vehent <ulfr@mozilla.com>
 package main
 
 import (
@@ -10,8 +15,8 @@ import (
 
 	// modules
 	"github.com/mozilla-services/userplex/modules"
-	_ "github.com/mozilla-services/userplex/modules/authorizedkeys"
-	//_ "github.com/mozilla-services/userplex/modules/aws"
+	//_ "github.com/mozilla-services/userplex/modules/authorizedkeys"
+	_ "github.com/mozilla-services/userplex/modules/aws"
 	//_ "github.com/mozilla-services/userplex/modules/datadog"
 
 	"github.com/mozilla-services/mozldap"
@@ -81,7 +86,7 @@ func main() {
 			log.Printf("[warning] %s module not registered, skipping it", modconf.Name)
 			continue
 		}
-		log.Println("running configuration for module", modconf.Name)
+		log.Println("[info] invoking module", modconf.Name)
 		run := modules.Available[modconf.Name].NewRun(modconf)
 		err = run.Run()
 		if err != nil {

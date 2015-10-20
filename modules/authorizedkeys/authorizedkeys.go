@@ -1,3 +1,8 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+//
+// Contributor: Julien Vehent <ulfr@mozilla.com>
 package authorizedkeys
 
 import (
@@ -80,6 +85,7 @@ func (r *run) getUserKeys(users []string) (userkeys map[string][]string) {
 			log.Printf("[warning] authorizedkeys: %v", err)
 			continue
 		}
+		// apply the uid map: only store the translated uid in the userkeys
 		for _, mapping := range r.Conf.UidMap {
 			if mapping.LdapUid == uid {
 				uid = mapping.UsedUid
