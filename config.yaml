@@ -9,6 +9,15 @@ ldap:
     # only used if uri isn't ldaps (TLS)
     starttls: true
 
+
+# A UID map translates a ldapuid into a useduid
+mycustomawsuidmap1: &CUSTOMMAP1
+    - ldapuid: bkelso
+      useduid: bob
+
+    - ldapuid: tanderson
+      useduid: neo
+
 modules:
 
     # authorizedkeys is a module that pull the public keys of a user and
@@ -20,17 +29,24 @@ modules:
         - devssh
       create: true
       delete: true
+      # anchor to the uid map defined above
+      uidmap: *CUSTOMMAP1
       parameters:
           # destination is where the public keys are written
           # {ldap:uid} means the "uid" attribute is used to create
           # a file for each user in the groups listed above
           destination: /data/puppet/modules/users/files/{ldap:uid}/.ssh/authorized_keys
+          # deletionmarker is a string that tells userplex how to recognize
+          # files it manages, in order to delete them when the users are no
+          # longer present in ldap
+          deletionmarker: allsshusers
 
     - name: authorizedkeys
       ldapgroups:
         - sysadmins
       create: true
-      delete: true
+      delete: false
+      uidmap: *CUSTOMMAP1
       parameters:
           # root is a special group that only has one authorized_keys file
           # and all the keys of all the group members are added to it
