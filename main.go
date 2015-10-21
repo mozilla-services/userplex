@@ -15,9 +15,9 @@ import (
 
 	// modules
 	"github.com/mozilla-services/userplex/modules"
-	//_ "github.com/mozilla-services/userplex/modules/authorizedkeys"
+	_ "github.com/mozilla-services/userplex/modules/authorizedkeys"
 	_ "github.com/mozilla-services/userplex/modules/aws"
-	//_ "github.com/mozilla-services/userplex/modules/datadog"
+	_ "github.com/mozilla-services/userplex/modules/datadog"
 
 	"github.com/mozilla-services/mozldap"
 	"gopkg.in/yaml.v2"
