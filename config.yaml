@@ -63,9 +63,19 @@ modules:
       # delete aws users that are in the roles but no longer in ldap
       delete: true
       parameters:
-          assignroles:
-            - ldap_managed
+          # users will be added to the following IAM groups
+          iamgroups:
+            - ldapmanaged
+          # send email notifications to new users. If disabled, passwords of new
+          # users are logged in the userplex output
+          notifynewusers: true
+          # from address for notifications
+          smtpfrom: "User Operations <userops+userplex@example.net>"
+          smtprelay: "localhost:25"
+          signinurl: "https://myawsaccount.signin.aws.amazon.com/console"
       credentials:
+          # leave these blank if your credentials are set as env variables,
+          # or if you use AWS roles (which puts STS creds in the env)
           accesskey: AKIAnnnn
           secretkey: YOLOMAN
 
