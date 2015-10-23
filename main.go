@@ -49,6 +49,7 @@ func main() {
 	}
 	var config = flag.String("c", "config.yaml", "Load configuration from file")
 	var dryrun = flag.Bool("dry", false, "Dry run, don't create/delete, just show stuff")
+	var runmod = flag.String("module", "all", "Module to run. if 'all', run all available modules (default)")
 	flag.Parse()
 
 	// load the local configuration file
@@ -82,6 +83,9 @@ func main() {
 
 	// run each module in the order it appears in the configuration
 	for _, modconf := range conf.Modules {
+		if *runmod != "all" && *runmod != modconf.Name {
+			continue
+		}
 		if _, ok := modules.Available[modconf.Name]; !ok {
 			log.Printf("[warning] %s module not registered, skipping it", modconf.Name)
 			continue
