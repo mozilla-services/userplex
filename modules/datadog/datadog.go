@@ -55,37 +55,91 @@ func (r *run) Run() (err error) {
 		return
 	}
 	r.c = creds
-	client := datadog.NewClient(r.c.ApiKey, r.c.AppKey)
+	dcli := datadog.NewClient(r.c.ApiKey, r.c.AppKey)
 
-	users, err := r.Conf.LdapCli.GetUsersInGroups(r.Conf.LdapGroups)
+	ldapmails, err := r.findLdapUsers()
 	if err != nil {
 		return
 	}
-	var usermails []string
-	for _, user := range users {
+	ddusers, err := dcli.GetUsers()
+	if err != nil {
+		return
+	}
+	// find users to invite by comparing the ldap list with the existing datadog users
+	var newusers []string
+	if r.Conf.Create {
+		for _, ldapmail := range ldapmails {
+			found := false
+			for _, dduser := range ddusers {
+				if ldapmail == dduser.Handle {
+					found = true
+					break
+				}
+			}
+			if !found {
+				log.Printf("[info] user %q was not found in datadog. needs inviting.", ldapmail)
+				newusers = append(newusers, ldapmail)
+			}
+		}
+		if r.Conf.DryRun {
+			log.Printf("[dryrun] would have invited %d users to datadog", len(newusers))
+		} else {
+			err = dcli.InviteUsers(newusers)
+			if err != nil {
+				log.Printf("[error] failed to invite datadog users: %v", err)
+			}
+		}
+	}
+
+	// find datadog users that are no longer in ldap and need to be disabled
+	if r.Conf.Delete {
+		for _, dduser := range ddusers {
+			if dduser.Disabled {
+				continue
+			}
+			found := false
+			for _, ldapmail := range ldapmails {
+				if dduser.Handle == ldapmail {
+					found = true
+					break
+				}
+			}
+			if !found {
+				if r.Conf.DryRun {
+					log.Printf("[dryrun] would have disabled user %q from datadog", dduser.Handle)
+					continue
+				}
+				dduser.Disabled = true
+				err = dcli.UpdateUser(dduser)
+				if err != nil {
+					log.Printf("[error] failed to disabled datadog user %q: %v", dduser.Handle)
+				}
+
+			}
+		}
+	}
+	return
+}
+
+func (r *run) findLdapUsers() (ldapmails []string, err error) {
+	userdns, err := r.Conf.LdapCli.GetUsersInGroups(r.Conf.LdapGroups)
+	if err != nil {
+		return
+	}
+	for _, user := range userdns {
 		shortdn := strings.Split(user, ",")[0]
 		mail, err := r.Conf.LdapCli.GetUserEmail(shortdn)
 		if err != nil {
 			log.Printf("[error] can't get email of user %q: %v", shortdn, err)
 			continue
 		}
-		usermails = append(usermails, mail)
-	}
-	if r.Conf.DryRun {
-		log.Printf("[dryrun] would have invited %d users to join datadog", len(usermails))
-		return
-	}
-
-	//FIXME: exiting here because datadog is stoopid and will send notifications
-	// to all users all the time
-	return
-
-	err = client.InviteUsers(usermails)
-	if err != nil {
-		log.Printf("[error] failed to invite datadog users: %v", err)
-	}
-	for _, mail := range usermails {
-		log.Printf("[info] invited user %q to join datadog", mail)
+		// apply the uid map: only store the translated uid in the ldapuid
+		for _, mapping := range r.Conf.UidMap {
+			if mapping.LdapUid == mail {
+				mail = mapping.UsedUid
+			}
+		}
+		ldapmails = append(ldapmails, mail)
 	}
 	return
 }
