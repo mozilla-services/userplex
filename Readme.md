@@ -1,4 +1,4 @@
-# Userplex
+# Userplex [![GoDoc](https://godoc.org/github.com/mozilla-services/userplex?status.svg)](https://godoc.org/github.com/mozilla-services/userplex)
 
 Propagate users from LDAP to Puppet, AWS, Github, Datadog, ...
 
@@ -85,7 +85,7 @@ and `neo`, and then create the authorizedkeys files with the translated uids.
 
 ## Writing modules
 
-A module must import `github.com/mozilla-server/userplex/modules`.
+A module must import `github.com/mozilla-services/userplex/modules`.
 
 A module registers itself at runtime via its `init()` function which must
 call `modules.Register` with a module name and an instance implementing
@@ -132,6 +132,11 @@ Example with the `aws` module:
 
 ```go
 package aws
+
+import (
+    "github.com/mozilla-services/userplex/modules"
+    //... other imports
+)
 
 func init() {
 	modules.Register("aws", new(module))
