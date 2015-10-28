@@ -41,12 +41,10 @@ type parameters struct {
 }
 
 func (r *run) Run() (err error) {
-	var params parameters
-	err = r.Conf.GetParameters(&params)
+	err = r.Conf.GetParameters(&r.p)
 	if err != nil {
 		return err
 	}
-	r.p = params
 	users, err := r.Conf.LdapCli.GetUsersInGroups(r.Conf.LdapGroups)
 	if err != nil {
 		log.Fatal(err)

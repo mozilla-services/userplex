@@ -53,20 +53,14 @@ type credentials struct {
 }
 
 func (r *run) Run() (err error) {
-	var (
-		params parameters
-		creds  credentials
-	)
-	err = r.Conf.GetParameters(&params)
+	err = r.Conf.GetParameters(&r.p)
 	if err != nil {
 		return
 	}
-	r.p = params
-	err = r.Conf.GetCredentials(&creds)
+	err = r.Conf.GetCredentials(&r.c)
 	if err != nil {
 		return
 	}
-	r.c = creds
 	r.cli = r.initIamClient()
 	if r.cli == nil {
 		return fmt.Errorf("failed to connect to aws using access key %q", r.c.AccessKey)

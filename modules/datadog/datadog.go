@@ -41,20 +41,14 @@ type credentials struct {
 }
 
 func (r *run) Run() (err error) {
-	var (
-		params parameters
-		creds  credentials
-	)
-	err = r.Conf.GetParameters(&params)
+	err = r.Conf.GetParameters(&r.p)
 	if err != nil {
 		return
 	}
-	r.p = params
-	err = r.Conf.GetCredentials(&creds)
+	err = r.Conf.GetCredentials(&r.c)
 	if err != nil {
 		return
 	}
-	r.c = creds
 	dcli := datadog.NewClient(r.c.ApiKey, r.c.AppKey)
 
 	ldapmails, err := r.findLdapUsers()
