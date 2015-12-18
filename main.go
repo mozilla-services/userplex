@@ -25,8 +25,8 @@ import (
 
 type conf struct {
 	Ldap struct {
-		Uri, Username, Password string
-		Insecure, Starttls      bool
+		Uri, Username, Password, TLSCert, TLSKey, TLSCA string
+		Insecure, Starttls                              bool
 	}
 	UidMap []struct {
 		LdapUid string
@@ -40,6 +40,7 @@ func main() {
 	var (
 		err  error
 		conf conf
+		cli  mozldap.Client
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s - Manage users in various SaaS based on a LDAP source\n"+
@@ -63,12 +64,23 @@ func main() {
 	}
 
 	// instanciate an ldap client
-	cli, err := mozldap.NewClient(
-		conf.Ldap.Uri,
-		conf.Ldap.Username,
-		conf.Ldap.Password,
-		&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure},
-		conf.Ldap.Starttls)
+	if conf.Ldap.TLSCert != "" && conf.Ldap.TLSKey != "" && conf.Ldap.TLSCA != "" {
+		cli, err = mozldap.NewTLSClient(
+			conf.Ldap.Uri,
+			conf.Ldap.Username,
+			conf.Ldap.Password,
+			conf.Ldap.TLSCert,
+			conf.Ldap.TLSKey,
+			conf.Ldap.TLSCA,
+			&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure})
+	} else {
+		cli, err = mozldap.NewClient(
+			conf.Ldap.Uri,
+			conf.Ldap.Username,
+			conf.Ldap.Password,
+			&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure},
+			conf.Ldap.Starttls)
+	}
 	if err != nil {
 		log.Fatal(err)
 	}

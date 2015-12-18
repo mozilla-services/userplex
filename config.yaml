@@ -8,6 +8,11 @@ ldap:
     insecure: false
     # only used if uri isn't ldaps (TLS)
     starttls: true
+    # when using client certificates to connect to ldap, configure
+    # then below
+    tlscert: client.crt
+    tlskey:  client.key
+    tlsca:   ca.crt
 
 
 # A UID map translates a ldapuid into a useduid
