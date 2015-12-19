@@ -8,11 +8,13 @@ ldap:
     insecure: false
     # only used if uri isn't ldaps (TLS)
     starttls: true
-    # when using client certificates to connect to ldap, configure
-    # then below
+    # path to a file containing trusted root CA certificates
+    # leave blank to use the system's default
+    cacert:  ca.crt
+    # tlscert and tlskey can be used to specify a client certificate & key
+    # to connect to a ldaps server
     tlscert: client.crt
     tlskey:  client.key
-    tlsca:   ca.crt
 
 
 # A UID map translates a ldapuid into a useduid

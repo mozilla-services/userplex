@@ -25,8 +25,8 @@ import (
 
 type conf struct {
 	Ldap struct {
-		Uri, Username, Password, TLSCert, TLSKey, TLSCA string
-		Insecure, Starttls                              bool
+		Uri, Username, Password, TLSCert, TLSKey, CACert string
+		Insecure, Starttls                               bool
 	}
 	UidMap []struct {
 		LdapUid string
@@ -64,20 +64,21 @@ func main() {
 	}
 
 	// instanciate an ldap client
-	if conf.Ldap.TLSCert != "" && conf.Ldap.TLSKey != "" && conf.Ldap.TLSCA != "" {
+	if conf.Ldap.TLSCert != "" && conf.Ldap.TLSKey != "" {
 		cli, err = mozldap.NewTLSClient(
 			conf.Ldap.Uri,
 			conf.Ldap.Username,
 			conf.Ldap.Password,
 			conf.Ldap.TLSCert,
 			conf.Ldap.TLSKey,
-			conf.Ldap.TLSCA,
+			conf.Ldap.CACert,
 			&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure})
 	} else {
 		cli, err = mozldap.NewClient(
 			conf.Ldap.Uri,
 			conf.Ldap.Username,
 			conf.Ldap.Password,
+			conf.Ldap.CACert,
 			&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure},
 			conf.Ldap.Starttls)
 	}
