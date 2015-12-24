@@ -46,7 +46,7 @@ func (r *run) Run() (err error) {
 	if err != nil {
 		return err
 	}
-	users, err := r.Conf.LdapCli.GetUsersInGroups(r.Conf.LdapGroups)
+	users, err := r.Conf.LdapCli.GetEnabledUsersInGroups(r.Conf.LdapGroups)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -143,7 +143,7 @@ func (r *run) Run() (err error) {
 }
 
 func (r *run) findLdapUsers() (ldapmails []string, err error) {
-	userdns, err := r.Conf.LdapCli.GetUsersInGroups(r.Conf.LdapGroups)
+	userdns, err := r.Conf.LdapCli.GetEnabledUsersInGroups(r.Conf.LdapGroups)
 	if err != nil {
 		return
 	}
