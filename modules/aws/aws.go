@@ -88,7 +88,7 @@ func (r *run) Run() (err error) {
 		iamers := r.getIamers()
 		for uid, _ := range iamers {
 			if _, ok := ldapers[uid]; !ok {
-				log.Printf("[info] %q found in IAM group but not in LDAP, needs deletion", uid)
+				log.Printf("[info] aws: %q found in IAM group but not in LDAP, needs deletion", uid)
 				r.removeIamUser(uid)
 			}
 		}
@@ -98,7 +98,7 @@ func (r *run) Run() (err error) {
 
 func (r *run) getLdapers() (lgm map[string]bool) {
 	lgm = make(map[string]bool)
-	users, err := r.Conf.LdapCli.GetUsersInGroups(r.Conf.LdapGroups)
+	users, err := r.Conf.LdapCli.GetEnabledUsersInGroups(r.Conf.LdapGroups)
 	if err != nil {
 		return
 	}
@@ -167,18 +167,18 @@ func (r *run) createIamUser(uid string) {
 	password := "P" + randToken() + "%"
 	mail, err := r.Conf.LdapCli.GetUserEmailByUid(uid)
 	if err != nil {
-		log.Printf("[error] couldn't find email of user %q in ldap, notification not sent: %v", uid, err)
+		log.Printf("[error] aws: couldn't find email of user %q in ldap, notification not sent: %v", uid, err)
 		return
 	}
 	if r.Conf.DryRun {
-		log.Printf("[dryrun] would have created AWS IAM user %q with password %q", uid, password)
+		log.Printf("[dryrun] aws: would have created AWS IAM user %q with password %q", uid, password)
 		goto notify
 	}
 	cuo, err = r.cli.CreateUser(&iam.CreateUserInput{
 		UserName: aws.String(uid),
 	})
 	if err != nil || cuo == nil {
-		log.Printf("[error] failed to create user %q: %v", uid, err)
+		log.Printf("[error] aws: failed to create user %q: %v", uid, err)
 		return
 	}
 	clpo, err = r.cli.CreateLoginProfile(&iam.CreateLoginProfileInput{
@@ -187,7 +187,7 @@ func (r *run) createIamUser(uid string) {
 		PasswordResetRequired: aws.Bool(true),
 	})
 	if err != nil || clpo == nil {
-		log.Printf("[error] failed to create user %q: %v", uid, err)
+		log.Printf("[error] aws: failed to create user %q: %v", uid, err)
 		return
 	}
 	for _, group := range r.p.IamGroups {
@@ -217,7 +217,7 @@ func (r *run) updateUserGroups(uid string) {
 		UserName: aws.String(uid),
 	})
 	if err != nil || gresp == nil {
-		log.Printf("[info] groups of user %q not found, needs to be added", uid)
+		log.Printf("[info] aws: groups of user %q not found, needs to be added", uid)
 	}
 	// iterate through the groups and find the missing ones
 	for _, iamgroup := range r.p.IamGroups {
@@ -240,7 +240,7 @@ func (r *run) addUserToIamGroup(uid, group string) {
 		return
 	}
 	if r.Conf.DryRun {
-		log.Printf("[dryrun] would have added AWS IAM user %q to group %q", uid, group)
+		log.Printf("[dryrun] aws: would have added AWS IAM user %q to group %q", uid, group)
 		return
 	}
 	resp, err := r.cli.AddUserToGroup(&iam.AddUserToGroupInput{
@@ -248,7 +248,7 @@ func (r *run) addUserToIamGroup(uid, group string) {
 		UserName:  aws.String(uid),
 	})
 	if err != nil || resp == nil {
-		log.Printf("[error] failed to add user %q to group %q: %v", uid, group, err)
+		log.Printf("[error] aws: failed to add user %q to group %q: %v", uid, group, err)
 	}
 	return
 }
@@ -258,14 +258,14 @@ func (r *run) removeIamUser(uid string) {
 		return
 	}
 	if r.Conf.DryRun {
-		log.Printf("[dryrun] would have deleted AWS IAM user %q", uid)
+		log.Printf("[dryrun] aws: would have deleted AWS IAM user %q", uid)
 		return
 	}
 	gresp, err := r.cli.ListGroupsForUser(&iam.ListGroupsForUserInput{
 		UserName: aws.String(uid),
 	})
 	if err != nil || gresp == nil {
-		log.Printf("[error] failed to list groups for user %q: %v", uid, err)
+		log.Printf("[error] aws: failed to list groups for user %q: %v", uid, err)
 		return
 	}
 	// iterate through the groups and find the missing ones
@@ -276,23 +276,23 @@ func (r *run) removeIamUser(uid string) {
 		})
 		gname := strings.Replace(awsutil.Prettify(iamgroup), `"`, ``, -1)
 		if err != nil || resp == nil {
-			log.Printf("[error] failed to remove user %q from group %q: %v", uid, gname, err)
+			log.Printf("[error] aws: failed to remove user %q from group %q: %v", uid, gname, err)
 		} else {
-			log.Printf("[info] removed user %q from group %q", uid, gname)
+			log.Printf("[info] aws: removed user %q from group %q", uid, gname)
 		}
 	}
 	resp1, err := r.cli.DeleteLoginProfile(&iam.DeleteLoginProfileInput{
 		UserName: aws.String(uid),
 	})
 	if err != nil || resp1 == nil {
-		log.Printf("[error] failed to delete aws login profile for user %q: %v", uid, err)
+		log.Printf("[error] aws: failed to delete aws login profile for user %q: %v", uid, err)
 		return
 	}
 	resp2, err := r.cli.DeleteUser(&iam.DeleteUserInput{
 		UserName: aws.String(uid),
 	})
 	if err != nil || resp2 == nil {
-		log.Printf("[error] failed to delete aws user %q: %v", uid, err)
+		log.Printf("[error] aws: failed to delete aws user %q: %v", uid, err)
 		return
 	}
 	return
