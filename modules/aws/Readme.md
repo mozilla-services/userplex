@@ -1,6 +1,11 @@
 AWS Module
 ==========
-This module creates and deletes users from aws accounts based on LDAP groups.
+This module creates and deletes users from aws accounts based on LDAP groups,
+and sent notifications to newly created users with their temporary password.
+
+Important note: because notifications contain passwords, this module requires
+users to have a PGP public key uploaded on gpg.mozilla.org, and its fingerprint
+publishes in LDAP.
 
 The target aws account is defined by an access key and a secret key in the
 `credentials` section of the module configuration.

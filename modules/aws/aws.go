@@ -68,12 +68,16 @@ func (r *run) Run() (err error) {
 	// Retrieve a list of ldap users from the groups configured
 	// and create or add the users to groups.
 	ldapers := r.getLdapers()
-	for uid, _ := range ldapers {
+	for uid, haspubkey := range ldapers {
 		resp, err := r.cli.GetUser(&iam.GetUserInput{
 			UserName: aws.String(uid),
 		})
 		if err != nil || resp == nil {
-			log.Printf("[info] user %q not found, needs to be created", uid)
+			log.Printf("[info] aws: user %q not found, needs to be created", uid)
+			if !haspubkey {
+				log.Printf("[warning] aws: skipping creation of user %q because of missing PGP public key", uid)
+				continue
+			}
 			r.createIamUser(uid)
 		} else {
 			r.updateUserGroups(uid)
@@ -112,6 +116,13 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 			}
 		}
 		lgm[uid] = true
+		// make sure we can find a PGP public key for the user to encrypt the notification
+		// if no pubkey is found, log an error and set the user's entry to False
+		_, err = r.Conf.LdapCli.GetUserPGPKey(shortdn)
+		if err != nil {
+			log.Printf("[warning] aws: no pgp public key could be found for %s: %v", shortdn, err)
+			lgm[uid] = false
+		}
 	}
 	return
 }
