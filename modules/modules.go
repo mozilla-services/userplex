@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 //
 // Contributor: Julien Vehent <ulfr@mozilla.com>
+
 package modules
 
 import (
@@ -17,10 +18,25 @@ type Configuration struct {
 	UidMap      []umap         `yaml:"uidmap",json:"uidmap"`
 	Create      bool           `yaml:"create",json:"create"`
 	Delete      bool           `yaml:"delete",json:"delete"`
+	Notify      NotifyConf     `yaml:"notify",json:"notify"`
 	Credentials interface{}    `yaml:"credentials",json:"credentials"`
 	Parameters  interface{}    `yaml:"parameters",json:"parameters"`
 	DryRun      bool           `yaml:"dryrun",json:"dryrun"`
 	LdapCli     mozldap.Client `yaml:"-",json:"-"`
+}
+
+type NotifyConf struct {
+	Mode      string            `yaml:"mode",json:"mode"`
+	Recipient string            `yaml:"recipient",json:"recipient"`
+	Channel   chan Notification `yaml:"-",json:"-"`
+}
+
+type Notification struct {
+	Module      string
+	Recipient   string
+	Mode        string
+	Body        []byte
+	MustEncrypt bool
 }
 
 type umap struct {

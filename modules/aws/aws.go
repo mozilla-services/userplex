@@ -3,13 +3,13 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 //
 // Contributor: Julien Vehent <ulfr@mozilla.com>
+
 package aws
 
 import (
 	"crypto/rand"
 	"fmt"
 	"log"
-	"net/smtp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -146,6 +146,10 @@ func (r *run) initIamClient() *iam.IAM {
 // create a user in aws, assign temporary credentials and force password change, add the
 // user to the necessary groups, and send it an email
 func (r *run) createIamUser(uid string) {
+	var (
+		cuo  *iam.CreateUserOutput
+		clpo *iam.CreateLoginProfileOutput
+	)
 	if !r.Conf.Create {
 		return
 	}
@@ -156,35 +160,43 @@ func (r *run) createIamUser(uid string) {
 		return
 	}
 	if r.Conf.DryRun {
-		log.Printf("[dryrun] would have created AWS IAM user %q with password %q and sent notification to %q", uid, password, mail)
-		return
+		log.Printf("[dryrun] would have created AWS IAM user %q with password %q", uid, password)
+		goto notify
 	}
-	resp1, err := r.cli.CreateUser(&iam.CreateUserInput{
+	cuo, err = r.cli.CreateUser(&iam.CreateUserInput{
 		UserName: aws.String(uid),
 	})
-	if err != nil || resp1 == nil {
+	if err != nil || cuo == nil {
 		log.Printf("[error] failed to create user %q: %v", uid, err)
 		return
 	}
-	resp2, err := r.cli.CreateLoginProfile(&iam.CreateLoginProfileInput{
+	clpo, err = r.cli.CreateLoginProfile(&iam.CreateLoginProfileInput{
 		Password:              aws.String(password),
 		UserName:              aws.String(uid),
 		PasswordResetRequired: aws.Bool(true),
 	})
-	if err != nil || resp2 == nil {
+	if err != nil || clpo == nil {
 		log.Printf("[error] failed to create user %q: %v", uid, err)
 		return
 	}
 	for _, group := range r.p.IamGroups {
 		r.addUserToIamGroup(uid, group)
 	}
-	// notify user by email
-	err = r.sendMail(mail, uid, password)
-	if err != nil {
-		log.Printf("[error] failed to send mail notification to %q: %v", mail, err)
-		return
-	} else {
-		log.Printf("[info] notification sent to %q for user %q", mail, uid)
+notify:
+	// notify user
+	rcpt := r.Conf.Notify.Recipient
+	if rcpt == "{ldap:mail}" {
+		rcpt = mail
+	}
+	r.Conf.Notify.Channel <- modules.Notification{
+		Module:      "aws",
+		Recipient:   rcpt,
+		Mode:        r.Conf.Notify.Mode,
+		MustEncrypt: true,
+		Body: []byte(fmt.Sprintf(`New AWS account:
+login: %s
+pass:  %s (change at first login)
+url:   %s`, uid, password, r.p.SigninUrl)),
 	}
 	return
 }
@@ -279,65 +291,4 @@ func randToken() string {
 	b := make([]byte, 8)
 	rand.Read(b)
 	return fmt.Sprintf("%x", b)
-}
-
-func (r *run) sendMail(rcpt, uid, password string) (err error) {
-	if !r.p.NotifyNewUsers {
-		log.Printf("[warn] notification of new users is disabled. password for user %q is %q", uid, password)
-		return
-	}
-	// Connect to the remote SMTP server.
-	c, err := smtp.Dial(r.p.SmtpRelay)
-	if err != nil {
-		return
-	}
-
-	// Set the sender and recipient first
-	err = c.Mail(r.p.SmtpFrom)
-	if err != nil {
-		return
-	}
-	err = c.Rcpt(rcpt)
-	if err != nil {
-		return
-	}
-
-	// Send the email body.
-	wc, err := c.Data()
-	if err != nil {
-		return
-	}
-	_, err = fmt.Fprintf(wc, `From: %s
-Subject: AWS Account creation notice
-Hi %s,
-
-Your AWS account has been created.
-login: %s
-pass:  %s
-url:   %s
-
-Your password will be changed at first login.
-
-To use the AWS API, create Access Keys in your profile:
-https://console.aws.amazon.com/iam/home#users/%s
-
-Reply to this email if you have any issue connecting.
-
-The Userplex Script.`,
-		r.p.SmtpFrom, uid, uid, password, r.p.SigninUrl, uid)
-
-	if err != nil {
-		return
-	}
-	err = wc.Close()
-	if err != nil {
-		return
-	}
-
-	// Send the QUIT command and close the connection.
-	err = c.Quit()
-	if err != nil {
-		return
-	}
-	return
 }

@@ -83,6 +83,28 @@ The map above will translate the ldap uids `bkelso` and `tanderson` into `bob`
 and `neo`, and then create the authorizedkeys files with the translated uids.
 
 
+### Notifications
+
+Userplex provides a simple way for modules to send notifications to their users
+when accounts are created and deleted.
+
+Modules only need to send a notification in a channel provided by the main
+userplex program, and don't need to know how to speak SMTP or other notification
+protocol. Notifications are aggregated per user, such that N notifications to a
+given user will only result in a single notification, to reduce the noise.
+
+Userplex can also encrypt notifications with the user's public PGP key. This
+requires two things:
+
+1. the user must have a public PGP fingerprint in LDAP (see
+   `mozldap.GetUserPGPFingerprint()` ).
+
+2. the module must set `modules.Notifications.MustEncrypt=true` when publishing
+   the notification in the channel.
+
+When aggregating notifications, Userplex will PGP encrypt the notification body
+with the user's public key if at least one notification requires encryption.
+
 ## Writing modules
 
 A module must import `github.com/mozilla-services/userplex/modules`.
@@ -236,6 +258,29 @@ func (r *run) Run() (err error) {
 
 	return
 }
+```
+
+### Sending notifications
+
+Modules receives a notification channel in `run.Conf.Notify.Channel` that
+accepts messages of type `modules.Notification`. Sending notifications to users
+is just a matter of publishing into that channel, and Userplex does the rest.
+
+```go
+rcpt := r.Conf.Notify.Recipient
+if rcpt == "{ldap:mail}" {
+	rcpt = myuseremail
+}
+r.Conf.Notify.Channel <- modules.Notification{
+	Module:      "mymodule",
+	Recipient:   rcpt,
+	Mode:        r.Conf.Notify.Mode,
+	MustEncrypt: true,
+	Body: []byte(fmt.Sprintf(`New MyModule account:
+login: %s
+pass:  %s (change at first login)
+url:   %s`, uid, password, url)),
+	}
 ```
 
 ## License

@@ -3,9 +3,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 //
 // Contributor: Julien Vehent <ulfr@mozilla.com>
-package aws
+
+package datadog
 
 import (
+	"fmt"
 	"log"
 	"strings"
 
@@ -73,6 +75,18 @@ func (r *run) Run() (err error) {
 			if !found {
 				log.Printf("[info] user %q was not found in datadog. needs inviting.", ldapmail)
 				newusers = append(newusers, ldapmail)
+				// notify user
+				rcpt := r.Conf.Notify.Recipient
+				if rcpt == "{ldap:mail}" {
+					rcpt = ldapmail
+				}
+				r.Conf.Notify.Channel <- modules.Notification{
+					Module:      "datadog",
+					Recipient:   rcpt,
+					Mode:        "smtp",
+					Body:        []byte(fmt.Sprintf(`User %s has been invited to join Datadog.`, ldapmail)),
+					MustEncrypt: false,
+				}
 			}
 		}
 		if r.Conf.DryRun {
@@ -101,12 +115,25 @@ func (r *run) Run() (err error) {
 			if !found {
 				if r.Conf.DryRun {
 					log.Printf("[dryrun] would have disabled user %q from datadog", dduser.Handle)
-					continue
+					goto notify
 				}
 				dduser.Disabled = true
 				err = dcli.UpdateUser(dduser)
 				if err != nil {
 					log.Printf("[error] failed to disabled datadog user %q: %v", dduser.Handle)
+				}
+			notify:
+				// notify user
+				rcpt := r.Conf.Notify.Recipient
+				if rcpt == "{ldap:mail}" {
+					rcpt = dduser.Handle
+				}
+				r.Conf.Notify.Channel <- modules.Notification{
+					Module:      "datadog",
+					Recipient:   rcpt,
+					Mode:        r.Conf.Notify.Mode,
+					Body:        []byte(fmt.Sprintf(`User %s has been removed from Datadog.`, dduser.Handle)),
+					MustEncrypt: false,
 				}
 
 			}

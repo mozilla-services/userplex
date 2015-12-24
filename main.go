@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 //
 // Contributor: Julien Vehent <ulfr@mozilla.com>
+
 package main
 
 import (
@@ -27,6 +28,12 @@ type conf struct {
 	Ldap struct {
 		Uri, Username, Password, TLSCert, TLSKey, CACert string
 		Insecure, Starttls                               bool
+		cli                                              mozldap.Client `yaml:"-",json:"-"`
+	}
+	Notifications struct {
+		Smtp struct {
+			Relay, From, Cc string
+		}
 	}
 	UidMap []struct {
 		LdapUid string
@@ -35,6 +42,10 @@ type conf struct {
 
 	Modules []modules.Configuration
 }
+
+var config = flag.String("c", "config.yaml", "Load configuration from file")
+var dryrun = flag.Bool("dry", false, "Dry run, don't create/delete, just show stuff")
+var runmod = flag.String("module", "all", "Module to run. if 'all', run all available modules (default)")
 
 func main() {
 	var (
@@ -48,10 +59,10 @@ func main() {
 			os.Args[0], os.Args[0])
 		flag.PrintDefaults()
 	}
-	var config = flag.String("c", "config.yaml", "Load configuration from file")
-	var dryrun = flag.Bool("dry", false, "Dry run, don't create/delete, just show stuff")
-	var runmod = flag.String("module", "all", "Module to run. if 'all', run all available modules (default)")
 	flag.Parse()
+
+	// safeguard
+	*dryrun = true
 
 	// load the local configuration file
 	fd, err := ioutil.ReadFile(*config)
@@ -86,12 +97,20 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Printf("connected %s on %s:%d, tls:%v starttls:%v\n", cli.BaseDN, cli.Host, cli.Port, cli.UseTLS, cli.UseStartTLS)
+	conf.Ldap.cli = cli
+
+	// Channel where modules publish their notifications
+	// which are aggregated and sent by the main program
+	notifchan := make(chan modules.Notification)
+	notifdone := make(chan bool)
+	go processNotifications(conf, notifchan, notifdone)
 
 	// store the value of dryrun and the ldap client
 	// in the configuration of each module
 	for i := range conf.Modules {
 		conf.Modules[i].DryRun = *dryrun
 		conf.Modules[i].LdapCli = cli
+		conf.Modules[i].Notify.Channel = notifchan
 	}
 
 	// run each module in the order it appears in the configuration
@@ -110,4 +129,8 @@ func main() {
 			log.Printf("[error] %s module failed with error: %v", modconf.Name, err)
 		}
 	}
+	// Modules are done, close the notification channel to tell the goroutine
+	// that it can aggregate and send them, and wait for notifdone to come back
+	close(notifchan)
+	<-notifdone
 }

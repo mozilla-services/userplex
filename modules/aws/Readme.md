@@ -37,33 +37,23 @@ from ldap, and delete their aws account.
 
 Notifications
 -------------
-New users receive a random password that must be changed at first login.
-The password can be communicated to them by email if the notification
-parameters are set.
+The module supports `smtp` notifications which can be sent to an arbitrary
+address, or the user's LDAP email address.
 ```yaml
 modules:
     - name: aws
+      notify:
+        mode: smtp
+        recipient: "{ldap:mail}"
       parameters:
-          notifynewusers: true
-          smtpfrom: "User Operations <userops+userplex@example.net>"
-          smtprelay: "localhost:25"
-          signinurl: "https://myawsaccount.signin.aws.amazon.com/console"
+          signinurl: "https://cloudservices-aws-dev.signin.aws.amazon.com/console"
+
 ```
-Users will receive an email similar to the one below:
-```
-Hi jvehent,
+Notifications are only sent on creation of user accounts. No notification is
+sent on deletion of an account.
 
-Your AWS account has been created.
-login: jvehent
-pass:  P80d78fafed1b003d%
-url:   https://myawsaccount.signin.aws.amazon.com/console
+The notification contains a username, a temporary password which must be changed
+at first connection, a signin URL and a pair of API access/secret keys.
 
-Your password will be changed at first login.
-
-To use the AWS API, create Access Keys in your profile:
-https://console.aws.amazon.com/iam/home#users/jvehent
-
-Reply to this email if you have any issue connecting.
-
-The Userplex Script.
-```
+Because it contains secrets, the notification is required to be encrypted with
+the public PGP key of the user (see main userplex documentation).
