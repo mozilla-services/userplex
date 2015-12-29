@@ -66,14 +66,14 @@ func sendSmtpNotifications(conf conf, smtpaggrnotif map[string][]modules.Notific
 				continue
 			}
 		}
-		if *dryrun {
-			log.Printf("[dryrun] would have sent email notification to %q with body\n%s\n", rcpt, body)
-		} else {
-			err = sendMail(conf, body, rcpt)
-			if err != nil {
-				log.Println("[error] failed to send email notification to", rcpt, ": %v", err)
-			}
+		//if *dryrun {
+		//	log.Printf("[dryrun] would have sent email notification to %q with body\n%s\n", rcpt, body)
+		//} else {
+		err = sendMail(conf, body, rcpt)
+		if err != nil {
+			log.Println("[error] failed to send email notification to", rcpt, ": %v", err)
 		}
+		//}
 	}
 }
 
@@ -155,61 +155,25 @@ func sendMail(conf conf, body []byte, rcpt string) (err error) {
 	if err != nil {
 		panic(err)
 	}
-	cdate := time.Now().Format("Mon, 2 Jan 2006 15:04:05 -0700")
 	// If the body is encrypted PGP, put it inside a MIME enveloppe
+	prefix := ""
 	if len(body) > 30 && fmt.Sprintf("%s", body[0:27]) == "-----BEGIN PGP MESSAGE-----" {
-		_, err = fmt.Fprintf(wc, `From: %s
+		prefix = `
+This message contains PGP encrypted data. It your mail agent does not
+automatically decrypt it, you can do so manually by saving the PGP
+block below to a file and decrypting it with "gpg -d file.asc".
+`
+	}
+	_, err = fmt.Fprintf(wc, `From: %s
 To: %s
 Cc: %s
 Subject: Userplex account changes
-Content-Type: multipart/encrypted; boundary="1450886287.E58FD0.11006"; protocol="application/pgp-encrypted"
-MIME-Version: 1.0
-Auto-Submitted: auto-generated
 Date: %s
-
---1450886287.E58FD0.11006
-Date: %s
-MIME-Version: 1.0
-Content-Type: application/pgp-encrypted; charset="UTF-8"
-Content-Transfer-Encoding: 7bit
-
-Version: 1
-
-
---1450886287.E58FD0.11006
-Date: %s
-MIME-Version: 1.0
-Content-Type: application/octet-stream; charset="UTF-8"
-Content-Transfer-Encoding: 7bit
-Content-Disposition: inline; filename="encrypted.asc"
 
 %s
-
-
---1450886287.E58FD0.11006--`,
-			conf.Notifications.Smtp.From,
-			rcpt,
-			conf.Notifications.Smtp.Cc,
-			cdate,
-			cdate,
-			cdate,
-			body)
-	} else {
-		// If the body is not encrypted, we just store it as is. No Mime.
-		_, err = fmt.Fprintf(wc, `From: %s
-To: %s
-Cc: %s
-Subject: Userplex account changes
-Auto-Submitted: auto-generated
-Date: %s
-
-%s`,
-			conf.Notifications.Smtp.From,
-			rcpt,
-			conf.Notifications.Smtp.Cc,
-			cdate,
-			body)
-	}
+%s
+`, conf.Notifications.Smtp.From, rcpt, conf.Notifications.Smtp.Cc,
+		time.Now().Format("Mon, 2 Jan 2006 15:04:05 -0700"), prefix, body)
 
 	if err != nil {
 		panic(err)
