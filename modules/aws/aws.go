@@ -255,17 +255,23 @@ func (r *run) addUserToIamGroup(uid, group string) {
 }
 
 func (r *run) removeIamUser(uid string) {
+	var (
+		err  error
+		lgfu *iam.ListGroupsForUserOutput
+		dlpo *iam.DeleteLoginProfileOutput
+		duo  *iam.DeleteUserOutput
+	)
 	if !r.Conf.Delete {
 		return
 	}
 	if r.Conf.DryRun {
 		log.Printf("[dryrun] aws: would have deleted AWS IAM user %q", uid)
-		return
+		goto notify
 	}
-	gresp, err := r.cli.ListGroupsForUser(&iam.ListGroupsForUserInput{
+	lgfu, err = r.cli.ListGroupsForUser(&iam.ListGroupsForUserInput{
 		UserName: aws.String(uid),
 	})
-	if err != nil || gresp == nil {
+	if err != nil || lgfu == nil {
 		log.Printf("[error] aws: failed to list groups for user %q: %v", uid, err)
 		return
 	}
@@ -282,19 +288,37 @@ func (r *run) removeIamUser(uid string) {
 			log.Printf("[info] aws: removed user %q from group %q", uid, gname)
 		}
 	}
-	resp1, err := r.cli.DeleteLoginProfile(&iam.DeleteLoginProfileInput{
+	dlpo, err = r.cli.DeleteLoginProfile(&iam.DeleteLoginProfileInput{
 		UserName: aws.String(uid),
 	})
-	if err != nil || resp1 == nil {
+	if err != nil || dlpo == nil {
 		log.Printf("[error] aws: failed to delete aws login profile for user %q: %v", uid, err)
 		return
 	}
-	resp2, err := r.cli.DeleteUser(&iam.DeleteUserInput{
+	duo, err = r.cli.DeleteUser(&iam.DeleteUserInput{
 		UserName: aws.String(uid),
 	})
-	if err != nil || resp2 == nil {
+	if err != nil || duo == nil {
 		log.Printf("[error] aws: failed to delete aws user %q: %v", uid, err)
 		return
+	}
+notify:
+	// notify user
+	rcpt := r.Conf.Notify.Recipient
+	if rcpt == "{ldap:mail}" {
+		rcpt, err = r.Conf.LdapCli.GetUserEmailByUid(uid)
+		if err != nil {
+			log.Printf("[error] aws: couldn't find email of user %q in ldap, notification not sent: %v", uid, err)
+			return
+		}
+	}
+	r.Conf.Notify.Channel <- modules.Notification{
+		Module:      "aws",
+		Recipient:   rcpt,
+		Mode:        r.Conf.Notify.Mode,
+		MustEncrypt: false,
+		Body: []byte(fmt.Sprintf(`Deleted AWS account:
+The account %q has been removed from %q.`, uid, r.p.SigninUrl)),
 	}
 	return
 }
