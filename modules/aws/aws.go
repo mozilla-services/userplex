@@ -45,7 +45,7 @@ type parameters struct {
 	NotifyNewUsers bool
 	SmtpRelay      string
 	SmtpFrom       string
-	SigninUrl      string
+	AccountName    string
 }
 
 type credentials struct {
@@ -208,7 +208,7 @@ notify:
 		Body: []byte(fmt.Sprintf(`New AWS account:
 login: %s
 pass:  %s (change at first login)
-url:   %s`, uid, password, r.p.SigninUrl)),
+url:   %s`, uid, password, fmt.Sprintf("https://%s.signin.aws.amazon.com/console", r.p.AccountName))),
 	}
 	return
 }
@@ -318,7 +318,7 @@ notify:
 		Mode:        r.Conf.Notify.Mode,
 		MustEncrypt: false,
 		Body: []byte(fmt.Sprintf(`Deleted AWS account:
-The account %q has been removed from %q.`, uid, r.p.SigninUrl)),
+The account %q has been removed from %q.`, uid, r.p.AccountName)),
 	}
 	return
 }
