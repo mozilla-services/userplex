@@ -15,7 +15,10 @@ How to connect to the LDAP source.
   using TLS or StartTLS
 * `starttls` enables starttls when the protocol is `ldap` (if the protocol is
   `ldaps`, then regular tls is used).
+If a client cert is needed, put the path to the cert in `tlscert` and the path
+to the key in `tlskey`.
 
+Example:
 
 ```yaml
 ldap:
@@ -24,6 +27,8 @@ ldap:
     password: "ohg81w0yofhd0193tyedlgh279eoqhsd"
     insecure: false
     starttls: true
+    tlscert:  /etc/userplex/cert.crt
+    tlskey:   /etc/userplex/cert.key
 ```
 
 ### Modules
@@ -91,7 +96,7 @@ when accounts are created and deleted.
 Modules only need to send a notification in a channel provided by the main
 userplex program, and don't need to know how to speak SMTP or other notification
 protocol. Notifications are aggregated per user, such that N notifications to a
-given user will only result in a single notification, to reduce the noise.
+given user will only result in a single notification being sent, to reduce noise.
 
 Userplex can also encrypt notifications with the user's public PGP key. This
 requires two things:
@@ -104,6 +109,9 @@ requires two things:
 
 When aggregating notifications, Userplex will PGP encrypt the notification body
 with the user's public key if at least one notification requires encryption.
+
+The AWS module is an example of requiring encryption, because it sends user
+credentials upon creation of an account.
 
 ## Writing modules
 
@@ -128,20 +136,6 @@ A module must have a unique name. A good practice is to use the same name for
 the module name as for the Go package name. However, it is possible for a
 single Go package to implement multiple modules, simply by registering
 different Modulers with different names.
-
-The sole method of a Moduler creates a new instance to represent a "run" of the
-module, implementing the `modules.Runner` interface:
-
-```go
-// Runner provides the interface to an execution of a module
-type Runner interface {
-	Run() error
-}
-```
-
-Any run-specific information should be associated with this instance and not with
-the Moduler or stored in a global variable.  It should be possible for multiple
-runs of the module to execute simultaneously.
 
 ### Configuration
 
@@ -187,7 +181,7 @@ type parameters struct {
 	NotifyNewUsers bool
 	SmtpRelay      string
 	SmtpFrom       string
-	SigninUrl      string
+	AccountName    string
 }
 
 // same logic as for the parameters
@@ -249,6 +243,19 @@ func (r *run) Run() (err error) {
 		if err != nil || resp == nil {
 			log.Printf("[info] user %q not found, needs to be created", uid)
 			r.createIamUser(uid)
+            // send a notification to the  user
+            r.Conf.Notify.Channel <- modules.Notification{
+                Module:      "aws",
+                Recipient:   usermail,
+                Mode:        r.Conf.Notify.Mode,
+                MustEncrypt: true,
+                Body: []byte(fmt.Sprintf(`New AWS account:
+                    login: %s
+                    pass:  %s (change at first login)
+                    url:   %s`,
+                    uid, password,
+                    fmt.Sprintf("https://%s.signin.aws.amazon.com/console", r.p.AccountName))),
+            }
 		} else {
 			r.updateUserGroups(uid)
 		}
