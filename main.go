@@ -31,8 +31,12 @@ type conf struct {
 		cli                                              mozldap.Client `yaml:"-",json:"-"`
 	}
 	Notifications struct {
-		Smtp struct {
-			Relay, From, Cc string
+		Email struct {
+			Host, From, Cc, ReplyTo string
+			Port                    int
+			Auth                    struct {
+				User, Pass string
+			}
 		}
 	}
 	UidMap []struct {
@@ -45,6 +49,7 @@ type conf struct {
 
 var config = flag.String("c", "config.yaml", "Load configuration from file")
 var dryrun = flag.Bool("dry", false, "Dry run, don't create/delete, just show stuff")
+var drynotif = flag.Bool("drynotif", false, "Same as dry run, but sends notifications out")
 var runmod = flag.String("module", "all", "Module to run. if 'all', run all available modules (default)")
 
 func main() {
@@ -61,8 +66,12 @@ func main() {
 	}
 	flag.Parse()
 
-	// safeguard
+	if *drynotif {
+		*dryrun = true
+	}
+	// safeguard, remove in prod
 	*dryrun = true
+	*drynotif = true
 
 	// load the local configuration file
 	fd, err := ioutil.ReadFile(*config)

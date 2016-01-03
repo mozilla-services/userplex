@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log"
 	"net/smtp"
-	"strings"
 	"time"
 
 	"golang.org/x/crypto/openpgp"
@@ -41,10 +40,10 @@ func processNotifications(conf conf, notifchan chan modules.Notification, notifd
 		}
 	}
 	log.Println("[info] all notifications have been received, proceeding with sending.")
-	sendSmtpNotifications(conf, smtpaggrnotif)
+	sendEmailNotifications(conf, smtpaggrnotif)
 }
 
-func sendSmtpNotifications(conf conf, smtpaggrnotif map[string][]modules.Notification) {
+func sendEmailNotifications(conf conf, smtpaggrnotif map[string][]modules.Notification) {
 	for rcpt, ntfs := range smtpaggrnotif {
 		var (
 			body        []byte
@@ -66,14 +65,14 @@ func sendSmtpNotifications(conf conf, smtpaggrnotif map[string][]modules.Notific
 				continue
 			}
 		}
-		//if *dryrun {
-		//	log.Printf("[dryrun] would have sent email notification to %q with body\n%s\n", rcpt, body)
-		//} else {
-		err = sendMail(conf, body, rcpt)
-		if err != nil {
-			log.Println("[error] failed to send email notification to", rcpt, ": %v", err)
+		if *dryrun && !*drynotif {
+			log.Printf("[dryrun] would have sent email notification to %q with body\n%s\n", rcpt, body)
+		} else {
+			err = sendMail(conf, body, rcpt)
+			if err != nil {
+				log.Println("[error] failed to send email notification to", rcpt, ": %v", err)
+			}
 		}
-		//}
 	}
 }
 
@@ -126,65 +125,36 @@ func sendMail(conf conf, body []byte, rcpt string) (err error) {
 			err = fmt.Errorf("sendMail-> %v", e)
 		}
 	}()
-	// Connect to the remote SMTP server.
-	c, err := smtp.Dial(conf.Notifications.Smtp.Relay)
-	if err != nil {
-		panic(err)
-	}
-
-	// Set the sender and recipient first
-	err = c.Mail(conf.Notifications.Smtp.From)
-	if err != nil {
-		panic(err)
-	}
-	err = c.Rcpt(rcpt)
-	if err != nil {
-		panic(err)
-	}
-	if conf.Notifications.Smtp.Cc != "" {
-		for _, cc := range strings.Split(conf.Notifications.Smtp.Cc, ",") {
-			err = c.Rcpt(cc)
-			if err != nil {
-				panic(err)
-			}
-		}
-	}
-
-	// Send the email body.
-	wc, err := c.Data()
-	if err != nil {
-		panic(err)
+	var auth smtp.Auth
+	if conf.Notifications.Email.Auth.User != "" && conf.Notifications.Email.Auth.Pass != "" {
+		auth = smtp.PlainAuth("", conf.Notifications.Email.Auth.User, conf.Notifications.Email.Auth.Pass, conf.Notifications.Email.Host)
 	}
 	// If the body is encrypted PGP, put it inside a MIME enveloppe
 	prefix := ""
 	if len(body) > 30 && fmt.Sprintf("%s", body[0:27]) == "-----BEGIN PGP MESSAGE-----" {
 		prefix = `
-This message contains PGP encrypted data. It your mail agent does not
-automatically decrypt it, you can do so manually by saving the PGP
-block below to a file and decrypting it with "gpg -d file.asc".
+This message contains PGP encrypted data. If your email agent does
+not automatically decrypt it, you can do so manually by saving the
+PGP block below to a file and decrypting it with "gpg -d file.asc".
 `
 	}
-	_, err = fmt.Fprintf(wc, `From: %s
+	err = smtp.SendMail(
+		fmt.Sprintf("%s:%d", conf.Notifications.Email.Host, conf.Notifications.Email.Port),
+		auth,
+		conf.Notifications.Email.From,
+		[]string{rcpt},
+		[]byte(fmt.Sprintf(`From: %s
 To: %s
 Cc: %s
+Reply-to: %s
 Subject: Userplex account changes
 Date: %s
 
 %s
 %s
-`, conf.Notifications.Smtp.From, rcpt, conf.Notifications.Smtp.Cc,
-		time.Now().Format("Mon, 2 Jan 2006 15:04:05 -0700"), prefix, body)
-
-	if err != nil {
-		panic(err)
-	}
-	err = wc.Close()
-	if err != nil {
-		panic(err)
-	}
-
-	// Send the QUIT command and close the connection.
-	err = c.Quit()
+`, conf.Notifications.Email.From, rcpt, conf.Notifications.Email.Cc, conf.Notifications.Email.ReplyTo,
+			time.Now().Format("Mon, 2 Jan 2006 15:04:05 -0700"), prefix, body)),
+	)
 	if err != nil {
 		panic(err)
 	}

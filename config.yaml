@@ -16,6 +16,18 @@ ldap:
     tlscert: client.crt
     tlskey:  client.key
 
+notifications:
+    email:
+        # your smtp relay may require authentication (AWS SES does), so make
+        # sure to set the parameters below to an authorized sender
+        host: "email-smtp.us-east-1.amazonaws.com"
+        port: 587
+        from: "myauthorizedsender@example.net"
+        cc:   "bob.kelso@gmail.com"
+        replyto: "Something <something@example.com>"
+        auth:
+            user: "AKIAI3TZL"
+            pass: "AoXAy......"
 
 # A UID map translates a ldapuid into a useduid
 mycustomawsuidmap1: &CUSTOMMAP1
