@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awsutil"
 	awscred "github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/mozilla-services/userplex/modules"
 )
@@ -151,7 +152,7 @@ func (r *run) initIamClient() *iam.IAM {
 		awscreds := awscred.NewStaticCredentials(r.c.AccessKey, r.c.SecretKey, "")
 		awsconf.Credentials = awscreds
 	}
-	return iam.New(&awsconf)
+	return iam.New(session.New(), &awsconf)
 }
 
 // create a user in aws, assign temporary credentials and force password change, add the
