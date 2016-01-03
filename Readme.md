@@ -1,6 +1,6 @@
 # Userplex [![GoDoc](https://godoc.org/github.com/mozilla-services/userplex?status.svg)](https://godoc.org/github.com/mozilla-services/userplex)
-
 Propagate users from LDAP to Puppet, AWS, Github, Datadog, ...
+[![Build Status](https://travis-ci.org/mozilla-services/userplex.svg)](https://travis-ci.org/mozilla-services/userplex)
 
 ## Configuration
 
