@@ -11,7 +11,7 @@ env:
   global:
     - DOCKER_EMAIL=jvehent@mozilla.com
     - DOCKER_USERNAME=jvehent
-    - secure: "LwcQZ/M+4M+HJf6b/bKcGdmuTcT4XeN5MVuBSy34ag79/Zz3UinwBpW3peOhFNizJUbMVzPJJ7FGMWeUouq6lCcjjQZAIBnPWx/bhP0z7vIO8t2+XqKV47D3HqPOokqEdeKHvzr4xvfKGMBy+VMCWeuFI7Z3BLCqtWSQYDjAMTg="
+    - secure: "qWXJB29xZ9WsKOZj+857IZjIILm9exCuQDeBXj7yu3uTqIp6gCoBx1ecLBgbW6WqUrhaebg3Cb2saQXHJFUt7aGmj+3+MwOuO/ks5GXCILWMW9AtiPJPXyUCJ3MZ/co+RqBlZATIYU4Ez48/fWCDJ/z6OF0XfDBclTY8adBAfklzPEgClYVfLRNW9/x0QXUFITAab5PU6iBEpRO7tpCQeAOCHfVanCdygxMQyGZkEhOFlziaPfjBVFCEYeoYq/53MjMAhWicTrGa95lHwGMXp/eGEuQnfuJmus3guA3ipwC6h17yUaeCxSIY8pf7y0I5XmO4bYxjZZUO/vsviuzczd3gndNAIHm/WqnThq0Gms2kfu22G1Krj7JzWIsE4VvMnKpWhmrcBGU2ywhQrbTvNyHD+TGaST0EMifGK8MGMaJ0SHy7kTC+dMEVWFoZ/oKbYcl3JMvcK0vqZlWPc8TZYjo6XJStuJFBwiWZSd8HsJI3SxErHmjOCWBWzzUfRqTaUoNfji0TOWTRcyAAx9iiOb5WNMtXllnl9Nt8pQvm3vI3zCRDFbCs/MrQwrlA8UJDP0zZhrTWphXdQclUOeNW3Z2BodlFDkQImBeIhGF6zOZqyuDm00F1VqYTgsA7d0NmPptl2PdoSSjU5OE2srUuIHg6LRLJ1UbmvwcOH3COhpE="
 script:
     - make && docker login -e="$DOCKER_EMAIL" -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
     - docker build -t jvehent/userplex -f Dockerfile .
