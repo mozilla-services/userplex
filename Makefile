@@ -50,6 +50,8 @@ go_vendor_dependencies:
 	$(GOGETTER) gopkg.in/yaml.v2
 	$(GOGETTER) github.com/aws/aws-sdk-go
 	$(GOGETTER) github.com/zorkian/go-datadog-api
+	$(GOGETTER) github.com/gorhill/cronexpr
+	$(GOGETTER) golang.org/x/crypto/openpgp
 	echo 'removing .git from vendored pkg and moving them to vendor'
 	find .tmpdeps/src -type d -name ".git" ! -name ".gitignore" -exec rm -rf {} \; || exit 0
 	cp -ar .tmpdeps/src/* vendor/
