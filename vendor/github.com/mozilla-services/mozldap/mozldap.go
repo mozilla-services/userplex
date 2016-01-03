@@ -22,6 +22,11 @@ type Client struct {
 	BaseDN      string
 }
 
+// Close the LDAP connection
+func (cli *Client) Close() {
+	cli.conn.Close()
+}
+
 // NewClient initializes a ldap connection to a given URI. if tlsconf is nil, sane
 // default are used (tls1.2, secure verify, ...).
 //
