@@ -1,5 +1,8 @@
 # Sample UserPlex configuration file
 
+# run every 15 minutes
+cron: "*/15 * * * *"
+
 ldap:
     uri: "ldap://ldap.example.net/dc=example,dc=net"
     username: bobkelso

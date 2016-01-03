@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"time"
 
 	// modules
 	"github.com/mozilla-services/userplex/modules"
@@ -20,11 +21,13 @@ import (
 	_ "github.com/mozilla-services/userplex/modules/aws"
 	_ "github.com/mozilla-services/userplex/modules/datadog"
 
+	"github.com/gorhill/cronexpr"
 	"github.com/mozilla-services/mozldap"
 	"gopkg.in/yaml.v2"
 )
 
 type conf struct {
+	Cron string
 	Ldap struct {
 		Uri, Username, Password, TLSCert, TLSKey, CACert string
 		Insecure, Starttls                               bool
@@ -50,6 +53,7 @@ type conf struct {
 var config = flag.String("c", "config.yaml", "Load configuration from file")
 var dryrun = flag.Bool("dry", false, "Dry run, don't create/delete, just show stuff")
 var drynotif = flag.Bool("drynotif", false, "Same as dry run, but sends notifications out")
+var once = flag.Bool("once", false, "Run only once and exit, don't under the cron loop")
 var runmod = flag.String("module", "all", "Module to run. if 'all', run all available modules (default)")
 
 func main() {
@@ -83,63 +87,83 @@ func main() {
 		log.Fatalf("error: %v", err)
 	}
 
-	// instanciate an ldap client
-	if conf.Ldap.TLSCert != "" && conf.Ldap.TLSKey != "" {
-		cli, err = mozldap.NewTLSClient(
-			conf.Ldap.Uri,
-			conf.Ldap.Username,
-			conf.Ldap.Password,
-			conf.Ldap.TLSCert,
-			conf.Ldap.TLSKey,
-			conf.Ldap.CACert,
-			&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure})
-	} else {
-		cli, err = mozldap.NewClient(
-			conf.Ldap.Uri,
-			conf.Ldap.Username,
-			conf.Ldap.Password,
-			conf.Ldap.CACert,
-			&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure},
-			conf.Ldap.Starttls)
-	}
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("connected %s on %s:%d, tls:%v starttls:%v\n", cli.BaseDN, cli.Host, cli.Port, cli.UseTLS, cli.UseStartTLS)
-	conf.Ldap.cli = cli
-
-	// Channel where modules publish their notifications
-	// which are aggregated and sent by the main program
-	notifchan := make(chan modules.Notification)
-	notifdone := make(chan bool)
-	go processNotifications(conf, notifchan, notifdone)
-
-	// store the value of dryrun and the ldap client
-	// in the configuration of each module
-	for i := range conf.Modules {
-		conf.Modules[i].DryRun = *dryrun
-		conf.Modules[i].LdapCli = cli
-		conf.Modules[i].Notify.Channel = notifchan
-	}
-
-	// run each module in the order it appears in the configuration
-	for _, modconf := range conf.Modules {
-		if *runmod != "all" && *runmod != modconf.Name {
-			continue
+	// infinite loop, wake up at the cron period
+	for {
+		if !*once {
+			cexpr, err := cronexpr.Parse(conf.Cron)
+			if err != nil {
+				log.Fatal("failed to parse cron string %q: %v", conf.Cron, err)
+			}
+			// sleep until the next run is scheduled to happen
+			nrun := cexpr.Next(time.Now())
+			waitduration := nrun.Sub(time.Now())
+			log.Printf("[info] next run will start at %v (in %v)", nrun, waitduration)
+			time.Sleep(waitduration)
 		}
-		if _, ok := modules.Available[modconf.Name]; !ok {
-			log.Printf("[warning] %s module not registered, skipping it", modconf.Name)
-			continue
+
+		// instanciate an ldap client
+		if conf.Ldap.TLSCert != "" && conf.Ldap.TLSKey != "" {
+			cli, err = mozldap.NewTLSClient(
+				conf.Ldap.Uri,
+				conf.Ldap.Username,
+				conf.Ldap.Password,
+				conf.Ldap.TLSCert,
+				conf.Ldap.TLSKey,
+				conf.Ldap.CACert,
+				&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure})
+		} else {
+			cli, err = mozldap.NewClient(
+				conf.Ldap.Uri,
+				conf.Ldap.Username,
+				conf.Ldap.Password,
+				conf.Ldap.CACert,
+				&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure},
+				conf.Ldap.Starttls)
 		}
-		log.Println("[info] invoking module", modconf.Name)
-		run := modules.Available[modconf.Name].NewRun(modconf)
-		err = run.Run()
 		if err != nil {
-			log.Printf("[error] %s module failed with error: %v", modconf.Name, err)
+			log.Fatal(err)
+		}
+		defer cli.Close()
+		log.Printf("connected %s on %s:%d, tls:%v starttls:%v\n", cli.BaseDN, cli.Host, cli.Port, cli.UseTLS, cli.UseStartTLS)
+		conf.Ldap.cli = cli
+
+		// Channel where modules publish their notifications
+		// which are aggregated and sent by the main program
+		notifchan := make(chan modules.Notification)
+		notifdone := make(chan bool)
+		go processNotifications(conf, notifchan, notifdone)
+
+		// store the value of dryrun and the ldap client
+		// in the configuration of each module
+		for i := range conf.Modules {
+			conf.Modules[i].DryRun = *dryrun
+			conf.Modules[i].LdapCli = cli
+			conf.Modules[i].Notify.Channel = notifchan
+		}
+
+		// run each module in the order it appears in the configuration
+		for _, modconf := range conf.Modules {
+			if *runmod != "all" && *runmod != modconf.Name {
+				continue
+			}
+			if _, ok := modules.Available[modconf.Name]; !ok {
+				log.Printf("[warning] %s module not registered, skipping it", modconf.Name)
+				continue
+			}
+			log.Println("[info] invoking module", modconf.Name)
+			run := modules.Available[modconf.Name].NewRun(modconf)
+			err = run.Run()
+			if err != nil {
+				log.Printf("[error] %s module failed with error: %v", modconf.Name, err)
+			}
+		}
+		// Modules are done, close the notification channel to tell the goroutine
+		// that it can aggregate and send them, and wait for notifdone to come back
+		close(notifchan)
+		<-notifdone
+
+		if *once {
+			break
 		}
 	}
-	// Modules are done, close the notification channel to tell the goroutine
-	// that it can aggregate and send them, and wait for notifdone to come back
-	close(notifchan)
-	<-notifdone
 }
