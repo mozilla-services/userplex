@@ -120,7 +120,7 @@ func NewClient(uri, username, password, cacertpath string, tlsconf *tls.Config, 
 //
 // * password is a password for the bind user
 //
-// *tlscertpath is the path to a X509 client certificate in PEM format, eg `/etc/mozldap/client.crt`
+// * tlscertpath is the path to a X509 client certificate in PEM format, eg `/etc/mozldap/client.crt`
 //
 // * tlskeypath is the path to the private key that maps to the client certificate, eg `/etc/mozldap/client.key`
 //
@@ -273,6 +273,26 @@ func (cli *Client) GetUserId(shortdn string) (uid string, err error) {
 	if uid == "" {
 		err = fmt.Errorf("no uid found in the attributes of user '%s'", shortdn)
 	}
+	return
+}
+
+// GetUserDNByID returns the distinguished name of a given user using his ID
+//
+// example: cli.GetUserDNByID("jvehent")
+func (cli *Client) GetUserDNById(uid string) (dn string, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			err = fmt.Errorf("mozldap.GetUserDNByID(uid=%q) -> %v", uid, e)
+		}
+	}()
+	entries, err := cli.Search("", "(uid="+uid+")", []string{"mail"})
+	if err != nil {
+		panic(err)
+	}
+	if len(entries) != 1 {
+		panic(fmt.Sprintf("found %d entries matching uid %q, expected 1", len(entries), uid))
+	}
+	dn = entries[0].DN
 	return
 }
 
@@ -511,4 +531,34 @@ func (cli *Client) GetUserEmail(shortdn string) (mail string, err error) {
 		}
 	}
 	panic("no mail attribute found")
+}
+
+// GetGroupsOfUser returns a list of groups a given user belongs to. This function returns the DN
+// of all groups, including posix and scm groups.
+//
+// dn is the distinguished name of the user, such as "mail=jvehent@mozilla.com,o=com,dc=mozilla"
+//
+// example: cli.GetGroupsOfUser("mail=jvehent@mozilla.com,o=com,dc=mozilla")
+func (cli *Client) GetGroupsOfUser(dn string) (groups []string, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			err = fmt.Errorf("mozldap.GetGroupsOfUser(dn=%q) -> %v", dn, e)
+		}
+	}()
+	uid, err := cli.GetUserId(strings.Split(dn, ",")[0])
+	if err != nil {
+		panic(err)
+	}
+	mail, err := cli.GetUserEmail(strings.Split(dn, ",")[0])
+	if err != nil {
+		panic(err)
+	}
+	entries, err := cli.Search("ou=groups,"+cli.BaseDN, "(|(member="+dn+")(memberUID="+uid+")(memberUID="+mail+"))", []string{"DN"})
+	if err != nil {
+		panic(err)
+	}
+	for _, entry := range entries {
+		groups = append(groups, entry.DN)
+	}
+	return
 }

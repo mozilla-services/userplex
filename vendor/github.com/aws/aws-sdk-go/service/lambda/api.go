@@ -9,6 +9,8 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/awsutil"
 	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/private/protocol"
+	"github.com/aws/aws-sdk-go/private/protocol/restjson"
 )
 
 const opAddPermission = "AddPermission"
@@ -175,6 +177,8 @@ func (c *Lambda) DeleteAliasRequest(input *DeleteAliasInput) (req *request.Reque
 	}
 
 	req = c.newRequest(op, input, output)
+	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
+	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
 	output = &DeleteAliasOutput{}
 	req.Data = output
 	return
@@ -236,6 +240,8 @@ func (c *Lambda) DeleteFunctionRequest(input *DeleteFunctionInput) (req *request
 	}
 
 	req = c.newRequest(op, input, output)
+	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
+	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
 	output = &DeleteFunctionOutput{}
 	req.Data = output
 	return
@@ -475,6 +481,9 @@ const opInvokeAsync = "InvokeAsync"
 
 // InvokeAsyncRequest generates a request for the InvokeAsync operation.
 func (c *Lambda) InvokeAsyncRequest(input *InvokeAsyncInput) (req *request.Request, output *InvokeAsyncOutput) {
+	if c.Client.Config.Logger != nil {
+		c.Client.Config.Logger.Log("This operation, InvokeAsync, has been deprecated")
+	}
 	op := &request.Operation{
 		Name:       opInvokeAsync,
 		HTTPMethod: "POST",
@@ -702,6 +711,8 @@ func (c *Lambda) RemovePermissionRequest(input *RemovePermissionInput) (req *req
 	}
 
 	req = c.newRequest(op, input, output)
+	req.Handlers.Unmarshal.Remove(restjson.UnmarshalHandler)
+	req.Handlers.Unmarshal.PushBackNamed(protocol.UnmarshalDiscardBodyHandler)
 	output = &RemovePermissionOutput{}
 	req.Data = output
 	return
@@ -1544,7 +1555,7 @@ func (s GetPolicyOutput) GoString() string {
 }
 
 type InvokeAsyncInput struct {
-	_ struct{} `type:"structure" payload:"InvokeArgs"`
+	_ struct{} `deprecated:"true" type:"structure" payload:"InvokeArgs"`
 
 	// The Lambda function name.
 	FunctionName *string `location:"uri" locationName:"FunctionName" min:"1" type:"string" required:"true"`
@@ -1565,7 +1576,7 @@ func (s InvokeAsyncInput) GoString() string {
 
 // Upon success, it returns empty response. Otherwise, throws an exception.
 type InvokeAsyncOutput struct {
-	_ struct{} `type:"structure"`
+	_ struct{} `deprecated:"true" type:"structure"`
 
 	// It will be 202 upon success.
 	Status *int64 `location:"statusCode" type:"integer"`
