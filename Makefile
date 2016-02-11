@@ -2,48 +2,16 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-BUILDREF	:= $(shell git log --pretty=format:'%h' -n 1)
-BUILDDATE	:= $(shell date +%Y%m%d)
-BUILDENV	:= dev
-BUILDREV	:= $(BUILDDATE)+$(BUILDREF).$(BUILDENV)
-
-# Supported OSes: linux darwin windows
-# Supported ARCHes: 386 amd64
-OS			:= linux
-ARCH		:= amd64
-
-ifeq ($(ARCH),amd64)
-	FPMARCH := x86_64
-endif
-ifeq ($(ARCH),386)
-	FPMARCH := i386
-endif
-ifeq ($(OS),windows)
-	BINSUFFIX   := ".exe"
-else
-	BINSUFFIX	:= ""
-endif
-PREFIX		:= /usr/local/
-DESTDIR		:= /
-BINDIR		:= bin/$(OS)/$(ARCH)
-GCC			:= gcc
-CFLAGS		:=
-LDFLAGS		:=
-GOOPTS		:=
+PROJECT		:= github.com/mozilla-services/userplex
 GO 			:= GOOS=$(OS) GOARCH=$(ARCH) GO15VENDOREXPERIMENT=1 go
 GOGETTER	:= GOPATH=$(shell pwd)/.tmpdeps go get -d
-GOLDFLAGS	:= -ldflags "-X main.version=$(BUILDREV)"
-GOCFLAGS	:=
-MKDIR		:= mkdir
-INSTALL		:= install
 
-all: test userplex
+all: test vet generate userplex
+
+dev: lint cyclo all
 
 userplex:
-	echo building userplex for $(OS)/$(ARCH)
-	$(MKDIR) -p $(BINDIR)
-	$(GO) build $(GOOPTS) -o $(BINDIR)/userplex-$(BUILDREV)$(BINSUFFIX) $(GOLDFLAGS) github.com/mozilla-services/userplex
-	[ -x "$(BINDIR)/userplex-$(BUILDREV)$(BINSUFFIX)" ] && echo SUCCESS && exit 0
+	$(GO) install github.com/mozilla-services/userplex
 
 go_vendor_dependencies:
 	$(GOGETTER) github.com/mozilla-services/mozldap
@@ -60,5 +28,17 @@ go_vendor_dependencies:
 test:
 	$(GO) test github.com/mozilla-services/userplex/modules/...
 	$(GO) test github.com/mozilla-services/userplex
+
+lint:
+	golint $(PROJECT)
+
+vet:
+	$(GO) vet $(PROJECT)
+
+generate:
+	$(GO) generate
+
+cyclo:
+	gocyclo -over 15 *.go modules/
 
 .PHONY: all test clean userplex

@@ -6,6 +6,8 @@
 
 package main
 
+//go:generate ./version.sh
+
 import (
 	"crypto/tls"
 	"flag"
@@ -55,6 +57,7 @@ var dryrun = flag.Bool("dry", false, "Dry run, don't create/delete, just show st
 var drynotif = flag.Bool("drynotif", false, "Same as dry run, but sends notifications out")
 var once = flag.Bool("once", false, "Run only once and exit, don't under the cron loop")
 var runmod = flag.String("module", "all", "Module to run. if 'all', run all available modules (default)")
+var showVersion = flag.Bool("V", false, "Show version and exit")
 
 func main() {
 	var (
@@ -69,6 +72,11 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version)
+		os.Exit(0)
+	}
 
 	if *drynotif {
 		*dryrun = true
@@ -92,7 +100,7 @@ func main() {
 		if !*once {
 			cexpr, err := cronexpr.Parse(conf.Cron)
 			if err != nil {
-				log.Fatal("failed to parse cron string %q: %v", conf.Cron, err)
+				log.Fatalf("failed to parse cron string %q: %v", conf.Cron, err)
 			}
 			// sleep until the next run is scheduled to happen
 			nrun := cexpr.Next(time.Now())
