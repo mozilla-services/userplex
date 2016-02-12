@@ -31,7 +31,7 @@ import (
 type conf struct {
 	Cron string
 	Ldap struct {
-		Uri, Username, Password, TLSCert, TLSKey, CACert string
+		URI, Username, Password, TLSCert, TLSKey, CACert string
 		Insecure, Starttls                               bool
 		cli                                              mozldap.Client `yaml:"-",json:"-"`
 	}
@@ -44,9 +44,9 @@ type conf struct {
 			}
 		}
 	}
-	UidMap []struct {
-		LdapUid string
-		UsedUid string
+	UIDMap []struct {
+		LdapUID string
+		UsedUID string
 	}
 
 	Modules []modules.Configuration
@@ -63,7 +63,6 @@ func main() {
 	var (
 		err  error
 		conf conf
-		cli  mozldap.Client
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s - Manage users in various SaaS based on a LDAP source\n"+
@@ -95,83 +94,91 @@ func main() {
 		log.Fatalf("error: %v", err)
 	}
 
+	// just run once
+	if *once {
+		run(conf)
+		return
+	}
+
 	// infinite loop, wake up at the cron period
 	for {
-		if !*once {
-			cexpr, err := cronexpr.Parse(conf.Cron)
-			if err != nil {
-				log.Fatalf("failed to parse cron string %q: %v", conf.Cron, err)
-			}
-			// sleep until the next run is scheduled to happen
-			nrun := cexpr.Next(time.Now())
-			waitduration := nrun.Sub(time.Now())
-			log.Printf("[info] next run will start at %v (in %v)", nrun, waitduration)
-			time.Sleep(waitduration)
-		}
-
-		// instanciate an ldap client
-		if conf.Ldap.TLSCert != "" && conf.Ldap.TLSKey != "" {
-			cli, err = mozldap.NewTLSClient(
-				conf.Ldap.Uri,
-				conf.Ldap.Username,
-				conf.Ldap.Password,
-				conf.Ldap.TLSCert,
-				conf.Ldap.TLSKey,
-				conf.Ldap.CACert,
-				&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure})
-		} else {
-			cli, err = mozldap.NewClient(
-				conf.Ldap.Uri,
-				conf.Ldap.Username,
-				conf.Ldap.Password,
-				conf.Ldap.CACert,
-				&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure},
-				conf.Ldap.Starttls)
-		}
+		cexpr, err := cronexpr.Parse(conf.Cron)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("failed to parse cron string %q: %v", conf.Cron, err)
 		}
-		defer cli.Close()
-		log.Printf("connected %s on %s:%d, tls:%v starttls:%v\n", cli.BaseDN, cli.Host, cli.Port, cli.UseTLS, cli.UseStartTLS)
-		conf.Ldap.cli = cli
+		// sleep until the next run is scheduled to happen
+		nrun := cexpr.Next(time.Now())
+		waitduration := nrun.Sub(time.Now())
+		log.Printf("[info] next run will start at %v (in %v)", nrun, waitduration)
+		time.Sleep(waitduration)
 
-		// Channel where modules publish their notifications
-		// which are aggregated and sent by the main program
-		notifchan := make(chan modules.Notification)
-		notifdone := make(chan bool)
-		go processNotifications(conf, notifchan, notifdone)
+		run(conf)
+	}
+}
 
-		// store the value of dryrun and the ldap client
-		// in the configuration of each module
-		for i := range conf.Modules {
-			conf.Modules[i].DryRun = *dryrun
-			conf.Modules[i].LdapCli = cli
-			conf.Modules[i].Notify.Channel = notifchan
+func run(conf conf) {
+	var (
+		cli mozldap.Client
+		err error
+	)
+	// instanciate an ldap client
+	if conf.Ldap.TLSCert != "" && conf.Ldap.TLSKey != "" {
+		cli, err = mozldap.NewTLSClient(
+			conf.Ldap.URI,
+			conf.Ldap.Username,
+			conf.Ldap.Password,
+			conf.Ldap.TLSCert,
+			conf.Ldap.TLSKey,
+			conf.Ldap.CACert,
+			&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure})
+	} else {
+		cli, err = mozldap.NewClient(
+			conf.Ldap.URI,
+			conf.Ldap.Username,
+			conf.Ldap.Password,
+			conf.Ldap.CACert,
+			&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure},
+			conf.Ldap.Starttls)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer cli.Close()
+	log.Printf("connected %s on %s:%d, tls:%v starttls:%v\n", cli.BaseDN, cli.Host, cli.Port, cli.UseTLS, cli.UseStartTLS)
+	conf.Ldap.cli = cli
+
+	// Channel where modules publish their notifications
+	// which are aggregated and sent by the main program
+	notifchan := make(chan modules.Notification)
+	notifdone := make(chan bool)
+	go processNotifications(conf, notifchan, notifdone)
+
+	// store the value of dryrun and the ldap client
+	// in the configuration of each module
+	for i := range conf.Modules {
+		conf.Modules[i].DryRun = *dryrun
+		conf.Modules[i].LdapCli = cli
+		conf.Modules[i].Notify.Channel = notifchan
+	}
+
+	// run each module in the order it appears in the configuration
+	for _, modconf := range conf.Modules {
+		if *runmod != "all" && *runmod != modconf.Name {
+			continue
 		}
-
-		// run each module in the order it appears in the configuration
-		for _, modconf := range conf.Modules {
-			if *runmod != "all" && *runmod != modconf.Name {
-				continue
-			}
-			if _, ok := modules.Available[modconf.Name]; !ok {
-				log.Printf("[warning] %s module not registered, skipping it", modconf.Name)
-				continue
-			}
-			log.Println("[info] invoking module", modconf.Name)
-			run := modules.Available[modconf.Name].NewRun(modconf)
-			err = run.Run()
-			if err != nil {
-				log.Printf("[error] %s module failed with error: %v", modconf.Name, err)
-			}
+		if _, ok := modules.Available[modconf.Name]; !ok {
+			log.Printf("[warning] %s module not registered, skipping it", modconf.Name)
+			continue
 		}
-		// Modules are done, close the notification channel to tell the goroutine
-		// that it can aggregate and send them, and wait for notifdone to come back
-		close(notifchan)
-		<-notifdone
-
-		if *once {
-			break
+		log.Println("[info] invoking module", modconf.Name)
+		run := modules.Available[modconf.Name].NewRun(modconf)
+		err = run.Run()
+		if err != nil {
+			log.Printf("[error] %s module failed with error: %v", modconf.Name, err)
 		}
 	}
+	// Modules are done, close the notification channel to tell the goroutine
+	// that it can aggregate and send them, and wait for notifdone to come back
+	close(notifchan)
+	<-notifdone
 }

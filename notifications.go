@@ -47,7 +47,7 @@ func sendEmailNotifications(conf conf, smtpaggrnotif map[string][]modules.Notifi
 	for rcpt, ntfs := range smtpaggrnotif {
 		var (
 			body        []byte
-			mustEncrypt bool = false
+			mustEncrypt = false
 			err         error
 		)
 		log.Println("[info] sending", len(ntfs), "notifications to recipient", rcpt)
@@ -78,7 +78,7 @@ func sendEmailNotifications(conf conf, smtpaggrnotif map[string][]modules.Notifi
 
 // encryptMailBody retrieves the PGP fingerprint of a recipient from ldap, then
 // queries the gpg server to retrieve the public key and encrypts the body with it.
-func encryptMailBody(conf conf, orig_body []byte, rcpt string) (body []byte, err error) {
+func encryptMailBody(conf conf, origBody []byte, rcpt string) (body []byte, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = fmt.Errorf("encryptMailBody-> %v", e)
@@ -97,7 +97,7 @@ func encryptMailBody(conf conf, orig_body []byte, rcpt string) (body []byte, err
 	if err != nil {
 		panic(err)
 	}
-	_, err = w.Write([]byte(orig_body))
+	_, err = w.Write([]byte(origBody))
 	if err != nil {
 		panic(err)
 	}
