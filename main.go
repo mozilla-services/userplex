@@ -10,6 +10,7 @@ package main
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -31,9 +32,10 @@ import (
 type conf struct {
 	Cron string
 	Ldap struct {
-		URI, Username, Password, TLSCert, TLSKey, CACert string
-		Insecure, Starttls                               bool
-		cli                                              mozldap.Client `yaml:"-",json:"-"`
+		URI, Username, Password string
+		TLSCert, TLSKey, CACert string
+		Insecure, Starttls      bool
+		cli                     mozldap.Client `yaml:"-",json:"-"`
 	}
 	Notifications struct {
 		Email struct {
@@ -119,24 +121,32 @@ func run(conf conf) {
 		err error
 	)
 	// instanciate an ldap client
-	if conf.Ldap.TLSCert != "" && conf.Ldap.TLSKey != "" {
-		cli, err = mozldap.NewTLSClient(
-			conf.Ldap.URI,
-			conf.Ldap.Username,
-			conf.Ldap.Password,
-			conf.Ldap.TLSCert,
-			conf.Ldap.TLSKey,
-			conf.Ldap.CACert,
-			&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure})
-	} else {
-		cli, err = mozldap.NewClient(
-			conf.Ldap.URI,
-			conf.Ldap.Username,
-			conf.Ldap.Password,
-			conf.Ldap.CACert,
-			&tls.Config{InsecureSkipVerify: conf.Ldap.Insecure},
-			conf.Ldap.Starttls)
+	tlsconf := &tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: conf.Ldap.Insecure,
+		ServerName:         cli.Host,
 	}
+	if len(conf.Ldap.TLSCert) > 0 && len(conf.Ldap.TLSKey) > 0 {
+		cert, err := tls.X509KeyPair([]byte(conf.Ldap.TLSCert), []byte(conf.Ldap.TLSKey))
+		if err != nil {
+			log.Fatal(err)
+		}
+		tlsconf.Certificates = []tls.Certificate{cert}
+	}
+	if len(conf.Ldap.CACert) > 0 {
+		ca := x509.NewCertPool()
+		if ok := ca.AppendCertsFromPEM([]byte(conf.Ldap.CACert)); !ok {
+			log.Fatal("failed to import CA Certificate")
+		}
+		tlsconf.RootCAs = ca
+	}
+	cli, err = mozldap.NewClient(
+		conf.Ldap.URI,
+		conf.Ldap.Username,
+		conf.Ldap.Password,
+		tlsconf,
+		conf.Ldap.Starttls,
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
