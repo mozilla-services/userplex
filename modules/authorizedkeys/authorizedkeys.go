@@ -105,7 +105,7 @@ func (r *run) deleteMarkedFiles() (err error) {
 	if !r.Conf.Delete {
 		return
 	}
-	globber := strings.Replace(r.p.Destination, "{ldap:uid}", "*", -1)
+	globber := interpolate(r.p.Destination, "*")
 	files, err := filepath.Glob(globber)
 	if err != nil {
 		return
@@ -139,7 +139,7 @@ func (r *run) openDestFiles(userkeys map[string][]string) (destfiles map[string]
 	var err error
 	destfiles = make(map[string]*os.File)
 	for uid, _ := range userkeys {
-		dest := strings.Replace(r.p.Destination, "{ldap:uid}", uid, -1)
+		dest := interpolate(r.p.Destination, uid)
 		if _, ok := destfiles[dest]; !ok {
 			if !r.Conf.ApplyChanges {
 				log.Println("[dryrun] would have created", dest)
@@ -163,7 +163,7 @@ func (r *run) writePubKeys(userkeys map[string][]string, destfiles map[string]*o
 	}
 	sort.Strings(uids)
 	for _, uid := range uids {
-		dest := strings.Replace(r.p.Destination, "{ldap:uid}", uid, -1)
+		dest := interpolate(r.p.Destination, uid)
 		if !r.Conf.ApplyChanges {
 			log.Printf("[dryrun] would have written pubkey of %q into %q", uid, dest)
 			continue
@@ -188,4 +188,36 @@ func (r *run) writePubKeys(userkeys map[string][]string, destfiles map[string]*o
 		log.Printf("[info] %d keys written into %q", len(userkeys[uid]), dest)
 	}
 	return
+}
+
+func interpolate(orig, uid string) string {
+	prevstart := 0
+	for {
+		savedstr := orig[:prevstart]
+		substr := orig[prevstart:]
+		start := strings.Index(substr, "{")
+		stop := strings.Index(substr, "}")
+		if start < 0 || stop < 0 || stop < start {
+			break
+		}
+		comp := strings.Split(substr[start+1:stop], ":")
+		if len(comp) != 2 {
+			log.Printf("invalid interpolation format %q, expected <key>:<value>\n",
+				substr[start:stop])
+			break
+		}
+		var replacement string
+		switch comp[0] {
+		case "ldap":
+			switch comp[1] {
+			case "uid":
+				replacement = uid
+			}
+		case "env":
+			replacement = os.Getenv(comp[1])
+		}
+		orig = savedstr + substr[:start] + replacement + substr[stop+1:]
+		prevstart = stop + 1
+	}
+	return orig
 }
