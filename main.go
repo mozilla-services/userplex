@@ -54,7 +54,7 @@ type conf struct {
 	Modules []modules.Configuration
 }
 
-var config = flag.String("c", "config.yaml", "Load configuration from file")
+var config = flag.String("c", "", "Load configuration from file. Use stdin if omitted.")
 var applyChanges = flag.Bool("applyChanges", false, "By default, Userplex runs in dry mode. Set this flag to apply changes.")
 var notifyUsers = flag.Bool("notifyUsers", false, "If set, Userplex will send email notifications to users when changes are applied.")
 var once = flag.Bool("once", false, "Run only once and exit, don't under the cron loop")
@@ -80,11 +80,16 @@ func main() {
 	}
 
 	// load the local configuration file
-	fd, err := ioutil.ReadFile(*config)
+	var data []byte
+	if *config == "" {
+		data, err = ioutil.ReadAll(os.Stdin)
+	} else {
+		data, err = ioutil.ReadFile(*config)
+	}
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = yaml.Unmarshal(fd, &conf)
+	err = yaml.Unmarshal(data, &conf)
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
