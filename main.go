@@ -90,7 +90,7 @@ func main() {
 	}
 
 	// just run once
-	if *once {
+	if *once || conf.Cron == "disabled" {
 		run(conf)
 		return
 	}
