@@ -54,6 +54,10 @@ type StorageGatewayAPI interface {
 
 	CreateStorediSCSIVolume(*storagegateway.CreateStorediSCSIVolumeInput) (*storagegateway.CreateStorediSCSIVolumeOutput, error)
 
+	CreateTapeWithBarcodeRequest(*storagegateway.CreateTapeWithBarcodeInput) (*request.Request, *storagegateway.CreateTapeWithBarcodeOutput)
+
+	CreateTapeWithBarcode(*storagegateway.CreateTapeWithBarcodeInput) (*storagegateway.CreateTapeWithBarcodeOutput, error)
+
 	CreateTapesRequest(*storagegateway.CreateTapesInput) (*request.Request, *storagegateway.CreateTapesOutput)
 
 	CreateTapes(*storagegateway.CreateTapesInput) (*storagegateway.CreateTapesOutput, error)
@@ -197,6 +201,10 @@ type StorageGatewayAPI interface {
 	RetrieveTapeRecoveryPointRequest(*storagegateway.RetrieveTapeRecoveryPointInput) (*request.Request, *storagegateway.RetrieveTapeRecoveryPointOutput)
 
 	RetrieveTapeRecoveryPoint(*storagegateway.RetrieveTapeRecoveryPointInput) (*storagegateway.RetrieveTapeRecoveryPointOutput, error)
+
+	SetLocalConsolePasswordRequest(*storagegateway.SetLocalConsolePasswordInput) (*request.Request, *storagegateway.SetLocalConsolePasswordOutput)
+
+	SetLocalConsolePassword(*storagegateway.SetLocalConsolePasswordInput) (*storagegateway.SetLocalConsolePasswordOutput, error)
 
 	ShutdownGatewayRequest(*storagegateway.ShutdownGatewayInput) (*request.Request, *storagegateway.ShutdownGatewayOutput)
 

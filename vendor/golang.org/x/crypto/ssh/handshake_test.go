@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -103,7 +104,7 @@ func TestHandshakeBasic(t *testing.T) {
 			}
 			if i == 5 {
 				// halfway through, we request a key change.
-				_, _, err := trC.sendKexInit()
+				_, _, err := trC.sendKexInit(subsequentKeyExchange)
 				if err != nil {
 					t.Fatalf("sendKexInit: %v", err)
 				}
@@ -160,7 +161,7 @@ func TestHandshakeError(t *testing.T) {
 	}
 
 	// Now request a key change.
-	_, _, err = trC.sendKexInit()
+	_, _, err = trC.sendKexInit(subsequentKeyExchange)
 	if err != nil {
 		t.Errorf("sendKexInit: %v", err)
 	}
@@ -201,7 +202,7 @@ func TestHandshakeTwice(t *testing.T) {
 	}
 
 	// Now request a key change.
-	_, _, err = trC.sendKexInit()
+	_, _, err = trC.sendKexInit(subsequentKeyExchange)
 	if err != nil {
 		t.Errorf("sendKexInit: %v", err)
 	}
@@ -214,7 +215,7 @@ func TestHandshakeTwice(t *testing.T) {
 	}
 
 	// 2nd key change.
-	_, _, err = trC.sendKexInit()
+	_, _, err = trC.sendKexInit(subsequentKeyExchange)
 	if err != nil {
 		t.Errorf("sendKexInit: %v", err)
 	}
@@ -412,4 +413,46 @@ func testHandshakeErrorHandlingN(t *testing.T, readLimit, writeLimit int) {
 	}
 
 	wg.Wait()
+}
+
+func TestDisconnect(t *testing.T) {
+	if runtime.GOOS == "plan9" {
+		t.Skip("see golang.org/issue/7237")
+	}
+	checker := &testChecker{}
+	trC, trS, err := handshakePair(&ClientConfig{HostKeyCallback: checker.Check}, "addr")
+	if err != nil {
+		t.Fatalf("handshakePair: %v", err)
+	}
+
+	defer trC.Close()
+	defer trS.Close()
+
+	trC.writePacket([]byte{msgRequestSuccess, 0, 0})
+	errMsg := &disconnectMsg{
+		Reason:  42,
+		Message: "such is life",
+	}
+	trC.writePacket(Marshal(errMsg))
+	trC.writePacket([]byte{msgRequestSuccess, 0, 0})
+
+	packet, err := trS.readPacket()
+	if err != nil {
+		t.Fatalf("readPacket 1: %v", err)
+	}
+	if packet[0] != msgRequestSuccess {
+		t.Errorf("got packet %v, want packet type %d", packet, msgRequestSuccess)
+	}
+
+	_, err = trS.readPacket()
+	if err == nil {
+		t.Errorf("readPacket 2 succeeded")
+	} else if !reflect.DeepEqual(err, errMsg) {
+		t.Errorf("got error %#v, want %#v", err, errMsg)
+	}
+
+	_, err = trS.readPacket()
+	if err == nil {
+		t.Errorf("readPacket 3 succeeded")
+	}
 }

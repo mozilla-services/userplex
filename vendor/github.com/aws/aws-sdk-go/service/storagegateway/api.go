@@ -30,13 +30,13 @@ func (c *StorageGateway) ActivateGatewayRequest(input *ActivateGatewayInput) (re
 	return
 }
 
-// This operation activates the gateway you previously deployed on your host.
-// For more information, see  Activate the AWS Storage Gateway (http://docs.aws.amazon.com/storagegateway/latest/userguide/GettingStartedActivateGateway-common.html).
-// In the activation process, you specify information such as the region you
-// want to use for storing snapshots, the time zone for scheduled snapshots
-// the gateway snapshot schedule window, an activation key, and a name for your
-// gateway. The activation process also associates your gateway with your account;
-// for more information, see UpdateGatewayInformation.
+// Activates the gateway you previously deployed on your host. For more information,
+// see  Activate the AWS Storage Gateway (http://docs.aws.amazon.com/storagegateway/latest/userguide/GettingStartedActivateGateway-common.html).
+// In the activation process, you specify information such as the you want to
+// use for storing snapshots, the time zone for scheduled snapshots the gateway
+// snapshot schedule window, an activation key, and a name for your gateway.
+// The activation process also associates your gateway with your account; for
+// more information, see UpdateGatewayInformation.
 //
 // You must turn on the gateway VM before you can activate your gateway.
 func (c *StorageGateway) ActivateGateway(input *ActivateGatewayInput) (*ActivateGatewayOutput, error) {
@@ -65,9 +65,9 @@ func (c *StorageGateway) AddCacheRequest(input *AddCacheInput) (req *request.Req
 	return
 }
 
-// This operation configures one or more gateway local disks as cache for a
-// cached-volume gateway. This operation is supported only for the gateway-cached
-// volume architecture (see Storage Gateway Concepts (http://docs.aws.amazon.com/storagegateway/latest/userguide/StorageGatewayConcepts.html)).
+// Configures one or more gateway local disks as cache for a cached-volume gateway.
+// This operation is supported only for the gateway-cached volume architecture
+// (see Storage Gateway Concepts (http://docs.aws.amazon.com/storagegateway/latest/userguide/StorageGatewayConcepts.html)).
 //
 // In the request, you specify the gateway Amazon Resource Name (ARN) to which
 // you want to add cache, and one or more disk IDs that you want to configure
@@ -98,11 +98,11 @@ func (c *StorageGateway) AddTagsToResourceRequest(input *AddTagsToResourceInput)
 	return
 }
 
-// This operation adds one or more tags to the specified resource. You use tags
-// to add metadata to resources, which you can use to categorize these resources.
-// For example, you can categorize resources by purpose, owner, environment,
-// or team. Each tag consists of a key and a value, which you define. You can
-// add tags to the following AWS Storage Gateway resources:
+// Adds one or more tags to the specified resource. You use tags to add metadata
+// to resources, which you can use to categorize these resources. For example,
+// you can categorize resources by purpose, owner, environment, or team. Each
+// tag consists of a key and a value, which you define. You can add tags to
+// the following AWS Storage Gateway resources:
 //
 //  Storage gateways of all types
 //
@@ -138,9 +138,9 @@ func (c *StorageGateway) AddUploadBufferRequest(input *AddUploadBufferInput) (re
 	return
 }
 
-// This operation configures one or more gateway local disks as upload buffer
-// for a specified gateway. This operation is supported for both the gateway-stored
-// and gateway-cached volume architectures.
+// Configures one or more gateway local disks as upload buffer for a specified
+// gateway. This operation is supported for both the gateway-stored and gateway-cached
+// volume architectures.
 //
 //  In the request, you specify the gateway Amazon Resource Name (ARN) to which
 // you want to add upload buffer, and one or more disk IDs that you want to
@@ -171,10 +171,10 @@ func (c *StorageGateway) AddWorkingStorageRequest(input *AddWorkingStorageInput)
 	return
 }
 
-// This operation configures one or more gateway local disks as working storage
-// for a gateway. This operation is supported only for the gateway-stored volume
-// architecture. This operation is deprecated method in cached-volumes API version
-// (20120630). Use AddUploadBuffer instead.
+// Configures one or more gateway local disks as working storage for a gateway.
+// This operation is supported only for the gateway-stored volume architecture.
+// This operation is deprecated in cached-volumes API version 20120630. Use
+// AddUploadBuffer instead.
 //
 // Working storage is also referred to as upload buffer. You can also use the
 // AddUploadBuffer operation to add upload buffer to a stored-volume gateway.
@@ -265,8 +265,8 @@ func (c *StorageGateway) CreateCachediSCSIVolumeRequest(input *CreateCachediSCSI
 	return
 }
 
-// This operation creates a cached volume on a specified cached gateway. This
-// operation is supported only for the gateway-cached volume architecture.
+// Creates a cached volume on a specified cached gateway. This operation is
+// supported only for the gateway-cached volume architecture.
 //
 // Cache storage must be allocated to the gateway before you can create a cached
 // volume. Use the AddCache operation to add cache storage to a gateway.  In
@@ -302,7 +302,7 @@ func (c *StorageGateway) CreateSnapshotRequest(input *CreateSnapshotInput) (req 
 	return
 }
 
-// This operation initiates a snapshot of a volume.
+// Initiates a snapshot of a volume.
 //
 // AWS Storage Gateway provides the ability to back up point-in-time snapshots
 // of your data to Amazon Simple Storage (S3) for durable off-site recovery,
@@ -349,9 +349,8 @@ func (c *StorageGateway) CreateSnapshotFromVolumeRecoveryPointRequest(input *Cre
 	return
 }
 
-// This operation initiates a snapshot of a gateway from a volume recovery point.
-// This operation is supported only for the gateway-cached volume architecture
-// (see ).
+// Initiates a snapshot of a gateway from a volume recovery point. This operation
+// is supported only for the gateway-cached volume architecture.
 //
 // A volume recovery point is a point in time at which all data of the volume
 // is consistent and from which you can create a snapshot. To get a list of
@@ -393,8 +392,8 @@ func (c *StorageGateway) CreateStorediSCSIVolumeRequest(input *CreateStorediSCSI
 	return
 }
 
-// This operation creates a volume on a specified gateway. This operation is
-// supported only for the gateway-stored volume architecture.
+// Creates a volume on a specified gateway. This operation is supported only
+// for the gateway-stored volume architecture.
 //
 // The size of the volume to create is inferred from the disk size. You can
 // choose to preserve existing data on the disk, create volume from an existing
@@ -408,6 +407,37 @@ func (c *StorageGateway) CreateStorediSCSIVolumeRequest(input *CreateStorediSCSI
 // connect to the volume target.
 func (c *StorageGateway) CreateStorediSCSIVolume(input *CreateStorediSCSIVolumeInput) (*CreateStorediSCSIVolumeOutput, error) {
 	req, out := c.CreateStorediSCSIVolumeRequest(input)
+	err := req.Send()
+	return out, err
+}
+
+const opCreateTapeWithBarcode = "CreateTapeWithBarcode"
+
+// CreateTapeWithBarcodeRequest generates a request for the CreateTapeWithBarcode operation.
+func (c *StorageGateway) CreateTapeWithBarcodeRequest(input *CreateTapeWithBarcodeInput) (req *request.Request, output *CreateTapeWithBarcodeOutput) {
+	op := &request.Operation{
+		Name:       opCreateTapeWithBarcode,
+		HTTPMethod: "POST",
+		HTTPPath:   "/",
+	}
+
+	if input == nil {
+		input = &CreateTapeWithBarcodeInput{}
+	}
+
+	req = c.newRequest(op, input, output)
+	output = &CreateTapeWithBarcodeOutput{}
+	req.Data = output
+	return
+}
+
+// Creates a virtual tape by using your own barcode. You write data to the virtual
+// tape and then archive the tape.
+//
+// Cache storage must be allocated to the gateway before you can create a virtual
+// tape. Use the AddCache operation to add cache storage to a gateway.
+func (c *StorageGateway) CreateTapeWithBarcode(input *CreateTapeWithBarcodeInput) (*CreateTapeWithBarcodeOutput, error) {
+	req, out := c.CreateTapeWithBarcodeRequest(input)
 	err := req.Send()
 	return out, err
 }
@@ -463,11 +493,11 @@ func (c *StorageGateway) DeleteBandwidthRateLimitRequest(input *DeleteBandwidthR
 	return
 }
 
-// This operation deletes the bandwidth rate limits of a gateway. You can delete
-// either the upload and download bandwidth rate limit, or you can delete both.
-// If you delete only one of the limits, the other limit remains unchanged.
-// To specify which gateway to work with, use the Amazon Resource Name (ARN)
-// of the gateway in your request.
+// Deletes the bandwidth rate limits of a gateway. You can delete either the
+// upload and download bandwidth rate limit, or you can delete both. If you
+// delete only one of the limits, the other limit remains unchanged. To specify
+// which gateway to work with, use the Amazon Resource Name (ARN) of the gateway
+// in your request.
 func (c *StorageGateway) DeleteBandwidthRateLimit(input *DeleteBandwidthRateLimitInput) (*DeleteBandwidthRateLimitOutput, error) {
 	req, out := c.DeleteBandwidthRateLimitRequest(input)
 	err := req.Send()
@@ -494,8 +524,8 @@ func (c *StorageGateway) DeleteChapCredentialsRequest(input *DeleteChapCredentia
 	return
 }
 
-// This operation deletes Challenge-Handshake Authentication Protocol (CHAP)
-// credentials for a specified iSCSI target and initiator pair.
+// Deletes Challenge-Handshake Authentication Protocol (CHAP) credentials for
+// a specified iSCSI target and initiator pair.
 func (c *StorageGateway) DeleteChapCredentials(input *DeleteChapCredentialsInput) (*DeleteChapCredentialsOutput, error) {
 	req, out := c.DeleteChapCredentialsRequest(input)
 	err := req.Send()
@@ -522,10 +552,10 @@ func (c *StorageGateway) DeleteGatewayRequest(input *DeleteGatewayInput) (req *r
 	return
 }
 
-// This operation deletes a gateway. To specify which gateway to delete, use
-// the Amazon Resource Name (ARN) of the gateway in your request. The operation
-// deletes the gateway; however, it does not delete the gateway virtual machine
-// (VM) from your host computer.
+// Deletes a gateway. To specify which gateway to delete, use the Amazon Resource
+// Name (ARN) of the gateway in your request. The operation deletes the gateway;
+// however, it does not delete the gateway virtual machine (VM) from your host
+// computer.
 //
 // After you delete a gateway, you cannot reactivate it. Completed snapshots
 // of the gateway volumes are not deleted upon deleting the gateway, however,
@@ -564,11 +594,11 @@ func (c *StorageGateway) DeleteSnapshotScheduleRequest(input *DeleteSnapshotSche
 	return
 }
 
-// This operation deletes a snapshot of a volume.
+// Deletes a snapshot of a volume.
 //
-//  You can take snapshots of your gateway volumes on a scheduled or ad-hoc
-// basis. This API enables you to delete a snapshot schedule for a volume. For
-// more information, see Working with Snapshots (http://docs.aws.amazon.com/storagegateway/latest/userguide/WorkingWithSnapshots.html).
+// You can take snapshots of your gateway volumes on a scheduled or ad hoc
+// basis. This API action enables you to delete a snapshot schedule for a volume.
+// For more information, see Working with Snapshots (http://docs.aws.amazon.com/storagegateway/latest/userguide/WorkingWithSnapshots.html).
 // In the DeleteSnapshotSchedule request, you identify the volume by providing
 // its Amazon Resource Name (ARN).
 //
@@ -654,8 +684,8 @@ func (c *StorageGateway) DeleteVolumeRequest(input *DeleteVolumeInput) (req *req
 	return
 }
 
-// This operation deletes the specified gateway volume that you previously created
-// using the CreateCachediSCSIVolume or CreateStorediSCSIVolume API. For gateway-stored
+// Deletes the specified gateway volume that you previously created using the
+// CreateCachediSCSIVolume or CreateStorediSCSIVolume API. For gateway-stored
 // volumes, the local disk that was configured as the storage volume is not
 // deleted. You can reuse the local disk to create another storage volume.
 //
@@ -694,8 +724,8 @@ func (c *StorageGateway) DescribeBandwidthRateLimitRequest(input *DescribeBandwi
 	return
 }
 
-// This operation returns the bandwidth rate limits of a gateway. By default,
-// these limits are not set, which means no bandwidth rate limiting is in effect.
+// Returns the bandwidth rate limits of a gateway. By default, these limits
+// are not set, which means no bandwidth rate limiting is in effect.
 //
 // This operation only returns a value for a bandwidth rate limit only if the
 // limit is set. If no limits are set for the gateway, then this operation returns
@@ -727,8 +757,8 @@ func (c *StorageGateway) DescribeCacheRequest(input *DescribeCacheInput) (req *r
 	return
 }
 
-// This operation returns information about the cache of a gateway. This operation
-// is supported only for the gateway-cached volume architecture.
+// Returns information about the cache of a gateway. This operation is supported
+// only for the gateway-cached volume architecture.
 //
 //  The response includes disk IDs that are configured as cache, and it includes
 // the amount of cache allocated and used.
@@ -758,9 +788,8 @@ func (c *StorageGateway) DescribeCachediSCSIVolumesRequest(input *DescribeCached
 	return
 }
 
-// This operation returns a description of the gateway volumes specified in
-// the request. This operation is supported only for the gateway-cached volume
-// architecture.
+// Returns a description of the gateway volumes specified in the request. This
+// operation is supported only for the gateway-cached volume architecture.
 //
 //  The list of gateway volumes in the request must be from one gateway. In
 // the response Amazon Storage Gateway returns volume information sorted by
@@ -791,9 +820,8 @@ func (c *StorageGateway) DescribeChapCredentialsRequest(input *DescribeChapCrede
 	return
 }
 
-// This operation returns an array of Challenge-Handshake Authentication Protocol
-// (CHAP) credentials information for a specified iSCSI target, one for each
-// target-initiator pair.
+// Returns an array of Challenge-Handshake Authentication Protocol (CHAP) credentials
+// information for a specified iSCSI target, one for each target-initiator pair.
 func (c *StorageGateway) DescribeChapCredentials(input *DescribeChapCredentialsInput) (*DescribeChapCredentialsOutput, error) {
 	req, out := c.DescribeChapCredentialsRequest(input)
 	err := req.Send()
@@ -820,10 +848,10 @@ func (c *StorageGateway) DescribeGatewayInformationRequest(input *DescribeGatewa
 	return
 }
 
-// This operation returns metadata about a gateway such as its name, network
-// interfaces, configured time zone, and the state (whether the gateway is running
-// or not). To specify which gateway to describe, use the Amazon Resource Name
-// (ARN) of the gateway in your request.
+// Returns metadata about a gateway such as its name, network interfaces, configured
+// time zone, and the state (whether the gateway is running or not). To specify
+// which gateway to describe, use the Amazon Resource Name (ARN) of the gateway
+// in your request.
 func (c *StorageGateway) DescribeGatewayInformation(input *DescribeGatewayInformationInput) (*DescribeGatewayInformationOutput, error) {
 	req, out := c.DescribeGatewayInformationRequest(input)
 	err := req.Send()
@@ -850,9 +878,8 @@ func (c *StorageGateway) DescribeMaintenanceStartTimeRequest(input *DescribeMain
 	return
 }
 
-// This operation returns your gateway's weekly maintenance start time including
-// the day and time of the week. Note that values are in terms of the gateway's
-// time zone.
+// Returns your gateway's weekly maintenance start time including the day and
+// time of the week. Note that values are in terms of the gateway's time zone.
 func (c *StorageGateway) DescribeMaintenanceStartTime(input *DescribeMaintenanceStartTimeInput) (*DescribeMaintenanceStartTimeOutput, error) {
 	req, out := c.DescribeMaintenanceStartTimeRequest(input)
 	err := req.Send()
@@ -879,9 +906,9 @@ func (c *StorageGateway) DescribeSnapshotScheduleRequest(input *DescribeSnapshot
 	return
 }
 
-// This operation describes the snapshot schedule for the specified gateway
-// volume. The snapshot schedule information includes intervals at which snapshots
-// are automatically initiated on the volume.
+// Describes the snapshot schedule for the specified gateway volume. The snapshot
+// schedule information includes intervals at which snapshots are automatically
+// initiated on the volume.
 func (c *StorageGateway) DescribeSnapshotSchedule(input *DescribeSnapshotScheduleInput) (*DescribeSnapshotScheduleOutput, error) {
 	req, out := c.DescribeSnapshotScheduleRequest(input)
 	err := req.Send()
@@ -908,10 +935,10 @@ func (c *StorageGateway) DescribeStorediSCSIVolumesRequest(input *DescribeStored
 	return
 }
 
-// This operation returns the description of the gateway volumes specified in
-// the request. The list of gateway volumes in the request must be from one
-// gateway. In the response Amazon Storage Gateway returns volume information
-// sorted by volume ARNs.
+// Returns the description of the gateway volumes specified in the request.
+// The list of gateway volumes in the request must be from one gateway. In the
+// response Amazon Storage Gateway returns volume information sorted by volume
+// ARNs.
 func (c *StorageGateway) DescribeStorediSCSIVolumes(input *DescribeStorediSCSIVolumesInput) (*DescribeStorediSCSIVolumesOutput, error) {
 	req, out := c.DescribeStorediSCSIVolumesRequest(input)
 	err := req.Send()
@@ -992,7 +1019,7 @@ func (c *StorageGateway) DescribeTapeRecoveryPointsRequest(input *DescribeTapeRe
 // Returns a list of virtual tape recovery points that are available for the
 // specified gateway-VTL.
 //
-// A recovery point is a point in time view of a virtual tape at which all
+// A recovery point is a point-in-time view of a virtual tape at which all
 // the data on the virtual tape is consistent. If your gateway crashes, virtual
 // tapes that have recovery points can be recovered to a new gateway.
 func (c *StorageGateway) DescribeTapeRecoveryPoints(input *DescribeTapeRecoveryPointsInput) (*DescribeTapeRecoveryPointsOutput, error) {
@@ -1072,9 +1099,8 @@ func (c *StorageGateway) DescribeUploadBufferRequest(input *DescribeUploadBuffer
 	return
 }
 
-// This operation returns information about the upload buffer of a gateway.
-// This operation is supported for both the gateway-stored and gateway-cached
-// volume architectures.
+// Returns information about the upload buffer of a gateway. This operation
+// is supported for both the gateway-stored and gateway-cached volume architectures.
 //
 //  The response includes disk IDs that are configured as upload buffer space,
 // and it includes the amount of upload buffer space allocated and used.
@@ -1148,10 +1174,10 @@ func (c *StorageGateway) DescribeWorkingStorageRequest(input *DescribeWorkingSto
 	return
 }
 
-// This operation returns information about the working storage of a gateway.
-// This operation is supported only for the gateway-stored volume architecture.
-// This operation is deprecated in cached-volumes API version (20120630). Use
-// DescribeUploadBuffer instead.
+// Returns information about the working storage of a gateway. This operation
+// is supported only for the gateway-stored volume architecture. This operation
+// is deprecated in cached-volumes API version (20120630). Use DescribeUploadBuffer
+// instead.
 //
 // Working storage is also referred to as upload buffer. You can also use the
 // DescribeUploadBuffer operation to add upload buffer to a stored-volume gateway.
@@ -1223,17 +1249,17 @@ func (c *StorageGateway) ListGatewaysRequest(input *ListGatewaysInput) (req *req
 	return
 }
 
-// This operation lists gateways owned by an AWS account in a region specified
-// in the request. The returned list is ordered by gateway Amazon Resource Name
-// (ARN).
+// Lists gateways owned by an AWS account in a region specified in the request.
+// The returned list is ordered by gateway Amazon Resource Name (ARN).
 //
 // By default, the operation returns a maximum of 100 gateways. This operation
 // supports pagination that allows you to optionally reduce the number of gateways
 // returned in a response.
 //
-// If you have more gateways than are returned in a response-that is, the response
-// returns only a truncated list of your gateways-the response contains a marker
-// that you can specify in your next request to fetch the next page of gateways.
+// If you have more gateways than are returned in a response (that is, the
+// response returns only a truncated list of your gateways), the response contains
+// a marker that you can specify in your next request to fetch the next page
+// of gateways.
 func (c *StorageGateway) ListGateways(input *ListGatewaysInput) (*ListGatewaysOutput, error) {
 	req, out := c.ListGatewaysRequest(input)
 	err := req.Send()
@@ -1268,9 +1294,9 @@ func (c *StorageGateway) ListLocalDisksRequest(input *ListLocalDisksInput) (req 
 	return
 }
 
-// This operation returns a list of the gateway's local disks. To specify which
-// gateway to describe, you use the Amazon Resource Name (ARN) of the gateway
-// in the body of the request.
+// Returns a list of the gateway's local disks. To specify which gateway to
+// describe, you use the Amazon Resource Name (ARN) of the gateway in the body
+// of the request.
 //
 // The request returns a list of all disks, specifying which are configured
 // as working storage, cache storage, or stored volume or not configured at
@@ -1304,7 +1330,7 @@ func (c *StorageGateway) ListTagsForResourceRequest(input *ListTagsForResourceIn
 	return
 }
 
-// This operation lists the tags that have been added to the specified resource.
+// Lists the tags that have been added to the specified resource.
 func (c *StorageGateway) ListTagsForResource(input *ListTagsForResourceInput) (*ListTagsForResourceOutput, error) {
 	req, out := c.ListTagsForResourceRequest(input)
 	err := req.Send()
@@ -1331,8 +1357,8 @@ func (c *StorageGateway) ListVolumeInitiatorsRequest(input *ListVolumeInitiators
 	return
 }
 
-// This operation lists iSCSI initiators that are connected to a volume. You
-// can use this operation to determine whether a volume is being used or not.
+// Lists iSCSI initiators that are connected to a volume. You can use this operation
+// to determine whether a volume is being used or not.
 func (c *StorageGateway) ListVolumeInitiators(input *ListVolumeInitiatorsInput) (*ListVolumeInitiatorsOutput, error) {
 	req, out := c.ListVolumeInitiatorsRequest(input)
 	err := req.Send()
@@ -1359,8 +1385,8 @@ func (c *StorageGateway) ListVolumeRecoveryPointsRequest(input *ListVolumeRecove
 	return
 }
 
-// This operation lists the recovery points for a specified gateway. This operation
-// is supported only for the gateway-cached volume architecture.
+// Lists the recovery points for a specified gateway. This operation is supported
+// only for the gateway-cached volume architecture.
 //
 // Each gateway-cached volume has one recovery point. A volume recovery point
 // is a point in time at which all data of the volume is consistent and from
@@ -1398,9 +1424,9 @@ func (c *StorageGateway) ListVolumesRequest(input *ListVolumesInput) (req *reque
 	return
 }
 
-// This operation lists the iSCSI stored volumes of a gateway. Results are sorted
-// by volume ARN. The response includes only the volume ARNs. If you want additional
-// volume information, use the DescribeStorediSCSIVolumes API.
+// Lists the iSCSI stored volumes of a gateway. Results are sorted by volume
+// ARN. The response includes only the volume ARNs. If you want additional volume
+// information, use the DescribeStorediSCSIVolumes API.
 //
 // The operation supports pagination. By default, the operation returns a maximum
 // of up to 100 volumes. You can optionally specify the Limit field in the body
@@ -1442,7 +1468,7 @@ func (c *StorageGateway) RemoveTagsFromResourceRequest(input *RemoveTagsFromReso
 	return
 }
 
-// This operation removes one or more tags from the specified resource.
+// Removes one or more tags from the specified resource.
 func (c *StorageGateway) RemoveTagsFromResource(input *RemoveTagsFromResourceInput) (*RemoveTagsFromResourceOutput, error) {
 	req, out := c.RemoveTagsFromResourceRequest(input)
 	err := req.Send()
@@ -1469,10 +1495,10 @@ func (c *StorageGateway) ResetCacheRequest(input *ResetCacheInput) (req *request
 	return
 }
 
-// This operation resets all cache disks that have encountered a error and makes
-// the disks available for reconfiguration as cache storage. If your cache disk
-// encounters a error, the gateway prevents read and write operations on virtual
-// tapes in the gateway. For example, an error can occur when a disk is corrupted
+// Resets all cache disks that have encountered a error and makes the disks
+// available for reconfiguration as cache storage. If your cache disk encounters
+// a error, the gateway prevents read and write operations on virtual tapes
+// in the gateway. For example, an error can occur when a disk is corrupted
 // or removed from the gateway. When a cache is reset, the gateway loses its
 // cache storage. At this point you can reconfigure the disks as cache disks.
 //
@@ -1555,6 +1581,36 @@ func (c *StorageGateway) RetrieveTapeRecoveryPoint(input *RetrieveTapeRecoveryPo
 	return out, err
 }
 
+const opSetLocalConsolePassword = "SetLocalConsolePassword"
+
+// SetLocalConsolePasswordRequest generates a request for the SetLocalConsolePassword operation.
+func (c *StorageGateway) SetLocalConsolePasswordRequest(input *SetLocalConsolePasswordInput) (req *request.Request, output *SetLocalConsolePasswordOutput) {
+	op := &request.Operation{
+		Name:       opSetLocalConsolePassword,
+		HTTPMethod: "POST",
+		HTTPPath:   "/",
+	}
+
+	if input == nil {
+		input = &SetLocalConsolePasswordInput{}
+	}
+
+	req = c.newRequest(op, input, output)
+	output = &SetLocalConsolePasswordOutput{}
+	req.Data = output
+	return
+}
+
+// Sets the password for your VM local console. When you log in to the local
+// console for the first time, you log in to the VM with the default credentials.
+// We recommend that you set a new password. You don't need to know the default
+// password to set a new password.
+func (c *StorageGateway) SetLocalConsolePassword(input *SetLocalConsolePasswordInput) (*SetLocalConsolePasswordOutput, error) {
+	req, out := c.SetLocalConsolePasswordRequest(input)
+	err := req.Send()
+	return out, err
+}
+
 const opShutdownGateway = "ShutdownGateway"
 
 // ShutdownGatewayRequest generates a request for the ShutdownGateway operation.
@@ -1575,8 +1631,8 @@ func (c *StorageGateway) ShutdownGatewayRequest(input *ShutdownGatewayInput) (re
 	return
 }
 
-// This operation shuts down a gateway. To specify which gateway to shut down,
-// use the Amazon Resource Name (ARN) of the gateway in the body of your request.
+// Shuts down a gateway. To specify which gateway to shut down, use the Amazon
+// Resource Name (ARN) of the gateway in the body of your request.
 //
 // The operation shuts down the gateway service component running in the storage
 // gateway's virtual machine (VM) and not the VM.
@@ -1620,8 +1676,8 @@ func (c *StorageGateway) StartGatewayRequest(input *StartGatewayInput) (req *req
 	return
 }
 
-// This operation starts a gateway that you previously shut down (see ShutdownGateway).
-// After the gateway starts, you can then make other API calls, your applications
+// Starts a gateway that you previously shut down (see ShutdownGateway). After
+// the gateway starts, you can then make other API calls, your applications
 // can read from or write to the gateway's storage volumes and you will be able
 // to take snapshot backups.
 //
@@ -1656,10 +1712,9 @@ func (c *StorageGateway) UpdateBandwidthRateLimitRequest(input *UpdateBandwidthR
 	return
 }
 
-// This operation updates the bandwidth rate limits of a gateway. You can update
-// both the upload and download bandwidth rate limit or specify only one of
-// the two. If you don't set a bandwidth rate limit, the existing rate limit
-// remains.
+// Updates the bandwidth rate limits of a gateway. You can update both the upload
+// and download bandwidth rate limit or specify only one of the two. If you
+// don't set a bandwidth rate limit, the existing rate limit remains.
 //
 // By default, a gateway's bandwidth rate limits are not set. If you don't
 // set any limit, the gateway does not have any limitations on its bandwidth
@@ -1693,9 +1748,9 @@ func (c *StorageGateway) UpdateChapCredentialsRequest(input *UpdateChapCredentia
 	return
 }
 
-// This operation updates the Challenge-Handshake Authentication Protocol (CHAP)
-// credentials for a specified iSCSI target. By default, a gateway does not
-// have CHAP enabled; however, for added security, you might use it.
+// Updates the Challenge-Handshake Authentication Protocol (CHAP) credentials
+// for a specified iSCSI target. By default, a gateway does not have CHAP enabled;
+// however, for added security, you might use it.
 //
 //  When you update CHAP credentials, all existing connections on the target
 // are closed and initiators must reconnect with the new credentials.
@@ -1725,9 +1780,13 @@ func (c *StorageGateway) UpdateGatewayInformationRequest(input *UpdateGatewayInf
 	return
 }
 
-// This operation updates a gateway's metadata, which includes the gateway's
-// name and time zone. To specify which gateway to update, use the Amazon Resource
-// Name (ARN) of the gateway in your request.
+// Updates a gateway's metadata, which includes the gateway's name and time
+// zone. To specify which gateway to update, use the Amazon Resource Name (ARN)
+// of the gateway in your request.
+//
+// For Gateways activated after September 2, 2015, the gateway's ARN contains
+// the gateway ID rather than the gateway name. However, changing the name of
+// the gateway has no effect on the gateway's ARN.
 func (c *StorageGateway) UpdateGatewayInformation(input *UpdateGatewayInformationInput) (*UpdateGatewayInformationOutput, error) {
 	req, out := c.UpdateGatewayInformationRequest(input)
 	err := req.Send()
@@ -1754,8 +1813,8 @@ func (c *StorageGateway) UpdateGatewaySoftwareNowRequest(input *UpdateGatewaySof
 	return
 }
 
-// This operation updates the gateway virtual machine (VM) software. The request
-// immediately triggers the software update.
+// Updates the gateway virtual machine (VM) software. The request immediately
+// triggers the software update.
 //
 // When you make this request, you get a 200 OK success response immediately.
 // However, it might take some time for the update to complete. You can call
@@ -1793,9 +1852,9 @@ func (c *StorageGateway) UpdateMaintenanceStartTimeRequest(input *UpdateMaintena
 	return
 }
 
-// This operation updates a gateway's weekly maintenance start time information,
-// including day and time of the week. The maintenance time is the time in your
-// gateway's time zone.
+// Updates a gateway's weekly maintenance start time information, including
+// day and time of the week. The maintenance time is the time in your gateway's
+// time zone.
 func (c *StorageGateway) UpdateMaintenanceStartTime(input *UpdateMaintenanceStartTimeInput) (*UpdateMaintenanceStartTimeOutput, error) {
 	req, out := c.UpdateMaintenanceStartTimeRequest(input)
 	err := req.Send()
@@ -1822,7 +1881,7 @@ func (c *StorageGateway) UpdateSnapshotScheduleRequest(input *UpdateSnapshotSche
 	return
 }
 
-// This operation updates a snapshot schedule configured for a gateway volume.
+// Updates a snapshot schedule configured for a gateway volume.
 //
 // The default snapshot schedule for volume is once every 24 hours, starting
 // at the creation time of the volume. You can use this API to change the snapshot
@@ -1857,10 +1916,10 @@ func (c *StorageGateway) UpdateVTLDeviceTypeRequest(input *UpdateVTLDeviceTypeIn
 	return
 }
 
-// This operation updates the type of medium changer in a gateway-VTL. When
-// you activate a gateway-VTL, you select a medium changer type for the gateway-VTL.
-// This operation enables you to select a different type of medium changer after
-// a gateway-VTL is activated.
+// Updates the type of medium changer in a gateway-VTL. When you activate a
+// gateway-VTL, you select a medium changer type for the gateway-VTL. This operation
+// enables you to select a different type of medium changer after a gateway-VTL
+// is activated.
 func (c *StorageGateway) UpdateVTLDeviceType(input *UpdateVTLDeviceTypeInput) (*UpdateVTLDeviceTypeOutput, error) {
 	req, out := c.UpdateVTLDeviceTypeRequest(input)
 	err := req.Send()
@@ -1869,9 +1928,10 @@ func (c *StorageGateway) UpdateVTLDeviceType(input *UpdateVTLDeviceTypeInput) (*
 
 // A JSON object containing one or more of the following fields:
 //
-//   ActivateGatewayInput$ActivationKey   GatewayName   ActivateGatewayInput$GatewayRegion
-//   ActivateGatewayInput$GatewayTimezone   ActivateGatewayInput$GatewayType
-//   ActivateGatewayInput$TapeDriveType   ActivateGatewayInput$MediumChangerType
+//   ActivateGatewayInput$ActivationKey   ActivateGatewayInput$GatewayName
+//   ActivateGatewayInput$GatewayRegion   ActivateGatewayInput$GatewayTimezone
+//   ActivateGatewayInput$GatewayType   ActivateGatewayInput$TapeDriveType
+//  ActivateGatewayInput$MediumChangerType
 type ActivateGatewayInput struct {
 	_ struct{} `type:"structure"`
 
@@ -1884,29 +1944,27 @@ type ActivateGatewayInput struct {
 	// the actual configuration of your gateway.
 	ActivationKey *string `min:"1" type:"string" required:"true"`
 
-	// A unique identifier for your gateway. This name becomes part of the gateway
-	// Amazon Resources Name (ARN) which is what you use as an input to other operations.
+	// The name you configured for your gateway.
 	GatewayName *string `min:"2" type:"string" required:"true"`
 
-	// One of the values that indicates the region where you want to store the snapshot
-	// backups. The gateway region specified must be the same region as the region
-	// in your Host header in the request. For more information about available
-	// regions and endpoints for AWS Storage Gateway, see Regions and Endpoints
-	// (http://docs.aws.amazon.com/general/latest/gr/rande.html#sg_region) in the
-	// Amazon Web Services Glossary.
+	// A value that indicates the region where you want to store the snapshot backups.
+	// The gateway region specified must be the same region as the region in your
+	// Host header in the request. For more information about available regions
+	// and endpoints for AWS Storage Gateway, see Regions and Endpoints (http://docs.aws.amazon.com/general/latest/gr/rande.html#sg_region)
+	// in the Amazon Web Services Glossary.
 	//
 	// Valid Values: "us-east-1", "us-west-1", "us-west-2", "eu-west-1", "eu-central-1",
 	// "ap-northeast-1", "ap-southeast-1", "ap-southeast-2", "sa-east-1"
 	GatewayRegion *string `min:"1" type:"string" required:"true"`
 
-	// One of the values that indicates the time zone you want to set for the gateway.
-	// The time zone is used, for example, for scheduling snapshots and your gateway's
+	// A value that indicates the time zone you want to set for the gateway. The
+	// time zone is used, for example, for scheduling snapshots and your gateway's
 	// maintenance schedule.
 	GatewayTimezone *string `min:"3" type:"string" required:"true"`
 
-	// One of the values that defines the type of gateway to activate. The type
-	// specified is critical to all later functions of the gateway and cannot be
-	// changed after activation. The default value is STORED.
+	// A value that defines the type of gateway to activate. The type specified
+	// is critical to all later functions of the gateway and cannot be changed after
+	// activation. The default value is STORED.
 	GatewayType *string `min:"2" type:"string"`
 
 	// The value that indicates the type of medium changer to use for gateway-VTL.
@@ -1936,6 +1994,10 @@ func (s ActivateGatewayInput) GoString() string {
 // gateway. It is a string made of information such as your account, gateway
 // name, and region. This ARN is used to reference the gateway in other API
 // operations as well as resource-based authorization.
+//
+// For gateways activated prior to September 02, 2015 the gateway ARN contains
+// the gateway name rather than the gateway id. Changing the name of the gateway
+// has no effect on the gateway ARN.
 type ActivateGatewayOutput struct {
 	_ struct{} `type:"structure"`
 
@@ -2439,7 +2501,7 @@ type CreateStorediSCSIVolumeInput struct {
 
 	// The name of the iSCSI target used by initiators to connect to the target
 	// and as a suffix for the target ARN. For example, specifying TargetName as
-	// myvolume results in the target ARN of arn:aws:storagegateway:us-east-1:111122223333:gateway/mygateway/target/iqn.1997-05.com.amazon:myvolume.
+	// myvolume results in the target ARN of arn:aws:storagegateway:us-east-1:111122223333:gateway/sgw-12A3456B/target/iqn.1997-05.com.amazon:myvolume.
 	// The target name must be unique across all volumes of a gateway.
 	TargetName *string `min:"1" type:"string" required:"true"`
 }
@@ -2479,6 +2541,53 @@ func (s CreateStorediSCSIVolumeOutput) GoString() string {
 	return s.String()
 }
 
+// CreateTapeWithBarcodeInput
+type CreateTapeWithBarcodeInput struct {
+	_ struct{} `type:"structure"`
+
+	// The unique Amazon Resource Name (ARN) that represents the gateway to associate
+	// the virtual tape with. Use the ListGateways operation to return a list of
+	// gateways for your account and region.
+	GatewayARN *string `min:"50" type:"string" required:"true"`
+
+	// The barcode that you want to assign to the tape.
+	TapeBarcode *string `min:"7" type:"string" required:"true"`
+
+	// The size, in bytes, of the virtual tape that you want to create.
+	//
+	// The size must be aligned by gigabyte (1024*1024*1024 byte).
+	TapeSizeInBytes *int64 `type:"long" required:"true"`
+}
+
+// String returns the string representation
+func (s CreateTapeWithBarcodeInput) String() string {
+	return awsutil.Prettify(s)
+}
+
+// GoString returns the string representation
+func (s CreateTapeWithBarcodeInput) GoString() string {
+	return s.String()
+}
+
+// CreateTapeOutput
+type CreateTapeWithBarcodeOutput struct {
+	_ struct{} `type:"structure"`
+
+	// A unique Amazon Resource Name (ARN) that represents the virtual tape that
+	// was created.
+	TapeARN *string `min:"50" type:"string"`
+}
+
+// String returns the string representation
+func (s CreateTapeWithBarcodeOutput) String() string {
+	return awsutil.Prettify(s)
+}
+
+// GoString returns the string representation
+func (s CreateTapeWithBarcodeOutput) GoString() string {
+	return s.String()
+}
+
 // CreateTapesInput
 type CreateTapesInput struct {
 	_ struct{} `type:"structure"`
@@ -2489,24 +2598,24 @@ type CreateTapesInput struct {
 	// Using the same ClientToken prevents creating the tape multiple times.
 	ClientToken *string `min:"5" type:"string" required:"true"`
 
-	// The unique Amazon Resource Name(ARN) that represents the gateway to associate
+	// The unique Amazon Resource Name (ARN) that represents the gateway to associate
 	// the virtual tapes with. Use the ListGateways operation to return a list of
 	// gateways for your account and region.
 	GatewayARN *string `min:"50" type:"string" required:"true"`
 
-	// The number of virtual tapes you want to create.
+	// The number of virtual tapes that you want to create.
 	NumTapesToCreate *int64 `min:"1" type:"integer" required:"true"`
 
-	// A prefix you append to the barcode of the virtual tape you are creating.
-	// This makes a barcode unique.
+	// A prefix that you append to the barcode of the virtual tape you are creating.
+	// This prefix makes the barcode unique.
 	//
-	// The prefix must be 1 to 4 characters in length and must be upper-case letters
-	// A-Z.
+	// The prefix must be 1 to 4 characters in length and must be one of the uppercase
+	// letters from A to Z.
 	TapeBarcodePrefix *string `min:"1" type:"string" required:"true"`
 
-	// The size, in bytes, of the virtual tapes you want to create.
+	// The size, in bytes, of the virtual tapes that you want to create.
 	//
-	// The size must be gigabyte (1024*1024*1024 byte) aligned.
+	// The size must be aligned by gigabyte (1024*1024*1024 byte).
 	TapeSizeInBytes *int64 `type:"long" required:"true"`
 }
 
@@ -2524,7 +2633,7 @@ func (s CreateTapesInput) GoString() string {
 type CreateTapesOutput struct {
 	_ struct{} `type:"structure"`
 
-	// A list of unique Amazon Resource Named (ARN) that represents the virtual
+	// A list of unique Amazon Resource Names (ARNs) that represents the virtual
 	// tapes that were created.
 	TapeARNs []*string `type:"list"`
 }
@@ -3019,20 +3128,22 @@ type DescribeGatewayInformationOutput struct {
 	// to return a list of gateways for your account and region.
 	GatewayARN *string `min:"50" type:"string"`
 
-	// The gateway ID.
+	// The unique identifier assigned to your gateway during activation. This id
+	// becomes part of the gateway Amazon Resources Name (ARN) which you use as
+	// input for other operations.
 	GatewayId *string `min:"12" type:"string"`
 
-	// The gateway name.
+	// The name you configured for your gateway.
 	GatewayName *string `type:"string"`
 
 	// A NetworkInterface array that contains descriptions of the gateway network
 	// interfaces.
 	GatewayNetworkInterfaces []*NetworkInterface `type:"list"`
 
-	// One of the values that indicates the operating state of the gateway.
+	// A value that indicates the operating state of the gateway.
 	GatewayState *string `min:"2" type:"string"`
 
-	// One of the values that indicates the time zone configured for the gateway.
+	// A value that indicates the time zone configured for the gateway.
 	GatewayTimezone *string `min:"3" type:"string"`
 
 	// The type of the gateway.
@@ -3148,7 +3259,7 @@ func (s DescribeSnapshotScheduleOutput) GoString() string {
 	return s.String()
 }
 
-// A JSON Object containing a list of DescribeStorediSCSIVolumesInput$VolumeARNs.
+// A JSON object containing a list of DescribeStorediSCSIVolumesInput$VolumeARNs.
 type DescribeStorediSCSIVolumesInput struct {
 	_ struct{} `type:"structure"`
 
@@ -3752,7 +3863,7 @@ type ListTagsForResourceInput struct {
 
 	// The Amazon Resource Name (ARN) of the resource for which you want to list
 	// tags.
-	ResourceARN *string `min:"50" type:"string"`
+	ResourceARN *string `min:"50" type:"string" required:"true"`
 }
 
 // String returns the string representation
@@ -3952,11 +4063,11 @@ type RemoveTagsFromResourceInput struct {
 
 	// The Amazon Resource Name (ARN) of the resource you want to remove the tags
 	// from.
-	ResourceARN *string `min:"50" type:"string"`
+	ResourceARN *string `min:"50" type:"string" required:"true"`
 
 	// The keys of the tags you want to remove from the specified resource. A tag
 	// is composed of a key/value pair.
-	TagKeys []*string `type:"list"`
+	TagKeys []*string `type:"list" required:"true"`
 }
 
 // String returns the string representation
@@ -4108,6 +4219,46 @@ func (s RetrieveTapeRecoveryPointOutput) String() string {
 
 // GoString returns the string representation
 func (s RetrieveTapeRecoveryPointOutput) GoString() string {
+	return s.String()
+}
+
+// SetLocalConsolePasswordInput
+type SetLocalConsolePasswordInput struct {
+	_ struct{} `type:"structure"`
+
+	// The Amazon Resource Name (ARN) of the gateway. Use the ListGateways operation
+	// to return a list of gateways for your account and region.
+	GatewayARN *string `min:"50" type:"string" required:"true"`
+
+	// The password you want to set for your VM local console.
+	LocalConsolePassword *string `min:"6" type:"string" required:"true"`
+}
+
+// String returns the string representation
+func (s SetLocalConsolePasswordInput) String() string {
+	return awsutil.Prettify(s)
+}
+
+// GoString returns the string representation
+func (s SetLocalConsolePasswordInput) GoString() string {
+	return s.String()
+}
+
+type SetLocalConsolePasswordOutput struct {
+	_ struct{} `type:"structure"`
+
+	// The Amazon Resource Name (ARN) of the gateway. Use the ListGateways operation
+	// to return a list of gateways for your account and region.
+	GatewayARN *string `min:"50" type:"string"`
+}
+
+// String returns the string representation
+func (s SetLocalConsolePasswordOutput) String() string {
+	return awsutil.Prettify(s)
+}
+
+// GoString returns the string representation
+func (s SetLocalConsolePasswordOutput) GoString() string {
 	return s.String()
 }
 
@@ -4462,8 +4613,7 @@ type UpdateGatewayInformationInput struct {
 	// to return a list of gateways for your account and region.
 	GatewayARN *string `min:"50" type:"string" required:"true"`
 
-	// A unique identifier for your gateway. This name becomes part of the gateway
-	// Amazon Resources Name (ARN) which is what you use as an input to other operations.
+	// The name you configured for your gateway.
 	GatewayName *string `min:"2" type:"string"`
 
 	GatewayTimezone *string `min:"3" type:"string"`
@@ -4479,7 +4629,7 @@ func (s UpdateGatewayInformationInput) GoString() string {
 	return s.String()
 }
 
-// A JSON object containing the of the gateway that was updated.
+// A JSON object containing the ARN of the gateway that was updated.
 type UpdateGatewayInformationOutput struct {
 	_ struct{} `type:"structure"`
 
@@ -4643,7 +4793,6 @@ func (s UpdateSnapshotScheduleOutput) GoString() string {
 	return s.String()
 }
 
-// UpdateVTLDeviceTypeInput
 type UpdateVTLDeviceTypeInput struct {
 	_ struct{} `type:"structure"`
 

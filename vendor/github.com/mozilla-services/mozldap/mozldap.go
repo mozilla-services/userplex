@@ -41,7 +41,7 @@ func (cli *Client) Close() {
 // * tlsconf is a Go TLS Configuration
 //
 // * starttls requires that the LDAP connection is opened insecurely but immediately switched to TLS using the StartTLS protocol.
-func NewClient(uri, username, password, cacertpath string, tlsconf *tls.Config, starttls bool) (cli Client, err error) {
+func NewClient(uri, username, password string, tlsconf *tls.Config, starttls bool) (cli Client, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = fmt.Errorf("mozldap.NewClient(uri=%q, username=%q, password=****, starttls=%v) -> %v",
@@ -69,18 +69,6 @@ func NewClient(uri, username, password, cacertpath string, tlsconf *tls.Config, 
 			InsecureSkipVerify: false,
 			ServerName:         cli.Host,
 		}
-	}
-	if cacertpath != "" {
-		// import the ca cert
-		ca := x509.NewCertPool()
-		CAcert, err := ioutil.ReadFile(cacertpath)
-		if err != nil {
-			panic(err)
-		}
-		if ok := ca.AppendCertsFromPEM(CAcert); !ok {
-			panic("failed to import CA Certificate")
-		}
-		tlsconf.RootCAs = ca
 	}
 	// if we're secure, we want to check that
 	// the server name matches the uri hostname
@@ -158,9 +146,21 @@ func NewTLSClient(uri, username, password, tlscertpath, tlskeypath, cacertpath s
 			ServerName:         cli.Host,
 		}
 	}
+	if cacertpath != "" {
+		// import the ca cert
+		ca := x509.NewCertPool()
+		CAcert, err := ioutil.ReadFile(cacertpath)
+		if err != nil {
+			panic(err)
+		}
+		if ok := ca.AppendCertsFromPEM(CAcert); !ok {
+			panic("failed to import CA Certificate")
+		}
+		tlsconf.RootCAs = ca
+	}
 	tlsconf.Certificates = []tls.Certificate{cert}
 	// instantiate an ldap client
-	cli, err = NewClient(uri, username, password, cacertpath, tlsconf, false)
+	cli, err = NewClient(uri, username, password, tlsconf, false)
 	if err != nil {
 		panic(err)
 	}
