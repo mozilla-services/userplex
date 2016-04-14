@@ -2,6 +2,26 @@
 Propagate users from LDAP to Puppet, AWS, Github, Datadog, ...
 [![Build Status](https://travis-ci.org/mozilla-services/userplex.svg)](https://travis-ci.org/mozilla-services/userplex)
 
+## Installation
+
+If you don't yet have your GOPATH setup, follow these steps (an possibly add the
+env variables to your .bashrc).
+
+```bash
+$ go version
+go version go1.5 linux/amd64
+$ export GOPATH="$HOME/go"
+$ mkdir $GOPATH
+$ export GO15VENDOREXPERIMENT=1
+$ export PATH=$GOPATH/bin:$PATH
+```
+
+To download and install userplex into `$GOPATH/bin/userplex`, run this command:
+
+```
+$ go get github.com/mozilla-services/userplex
+```
+
 ## Configuration
 
 ### Ldap
@@ -15,8 +35,8 @@ How to connect to the LDAP source.
   using TLS or StartTLS
 * `starttls` enables starttls when the protocol is `ldap` (if the protocol is
   `ldaps`, then regular tls is used).
-If a client cert is needed, put the path to the cert in `tlscert` and the path
-to the key in `tlskey`.
+If a client cert is needed, put the PEM of the cert in `tlscert` and the PEM
+of the key in `tlskey`.
 
 Example:
 
@@ -27,8 +47,16 @@ ldap:
     password: "ohg81w0yofhd0193tyedlgh279eoqhsd"
     insecure: false
     starttls: true
-    tlscert:  /etc/userplex/cert.crt
-    tlskey:   /etc/userplex/cert.key
+    tlscert:  |
+        -----BEGIN CERTIFICATE-----
+        MIIEHzCCAwegAwIBAgIBBzANBgkqhkiG9w0BAQUFADByMQswCQYDVQQGEwJVUzET
+        CCpw
+        -----END CERTIFICATE-----
+    tlskey:   |
+        -----BEGIN RSA PRIVATE KEY-----
+        MIIEpAIBAAKCAQEAs3OJduktoyACixovmcLZFryq36WOCkesjrBO9+ElGg3BtpoJ
+        Mgg==
+        -----END RSA PRIVATE KEY-----
 ```
 
 ### Modules
