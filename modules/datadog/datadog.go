@@ -130,7 +130,7 @@ func (r *run) create(ldapmails []string, ddusers []datadog.User) (err error) {
 			}
 		}
 	}
-	if r.Conf.DryRun {
+	if !r.Conf.ApplyChanges {
 		log.Printf("[dryrun] would have invited %d users to datadog", len(newusers))
 	} else {
 		err = r.dcli.InviteUsers(newusers)
@@ -154,7 +154,7 @@ func (r *run) delete(ldapmails []string, ddusers []datadog.User) (err error) {
 			}
 		}
 		if !found {
-			if r.Conf.DryRun {
+			if !r.Conf.ApplyChanges {
 				log.Printf("[dryrun] would have disabled user %q from datadog", dduser.Handle)
 				goto notify
 			}

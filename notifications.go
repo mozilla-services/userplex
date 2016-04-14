@@ -65,9 +65,11 @@ func sendEmailNotifications(conf conf, smtpaggrnotif map[string][]modules.Notifi
 				continue
 			}
 		}
-		if *dryrun && !*drynotif {
+		if !*applyChanges && *notifyUsers {
 			log.Printf("[dryrun] would have sent email notification to %q with body\n%s\n", rcpt, body)
-		} else {
+			continue
+		}
+		if *applyChanges && *notifyUsers {
 			err = sendMail(conf, body, rcpt)
 			if err != nil {
 				log.Println("[error] failed to send email notification to", rcpt, ": %v", err)

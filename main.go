@@ -55,8 +55,8 @@ type conf struct {
 }
 
 var config = flag.String("c", "config.yaml", "Load configuration from file")
-var dryrun = flag.Bool("dry", false, "Dry run, don't create/delete, just show stuff")
-var drynotif = flag.Bool("drynotif", false, "Same as dry run, but sends notifications out")
+var applyChanges = flag.Bool("applyChanges", false, "By default, Userplex runs in dry mode. Set this flag to apply changes.")
+var notifyUsers = flag.Bool("notifyUsers", false, "If set, Userplex will send email notifications to users when changes are applied.")
 var once = flag.Bool("once", false, "Run only once and exit, don't under the cron loop")
 var runmod = flag.String("module", "all", "Module to run. if 'all', run all available modules (default)")
 var showVersion = flag.Bool("V", false, "Show version and exit")
@@ -77,10 +77,6 @@ func main() {
 	if *showVersion {
 		fmt.Println(version)
 		os.Exit(0)
-	}
-
-	if *drynotif {
-		*dryrun = true
 	}
 
 	// load the local configuration file
@@ -160,10 +156,10 @@ func run(conf conf) {
 	notifdone := make(chan bool)
 	go processNotifications(conf, notifchan, notifdone)
 
-	// store the value of dryrun and the ldap client
+	// store the value of applyChanges and the ldap client
 	// in the configuration of each module
 	for i := range conf.Modules {
-		conf.Modules[i].DryRun = *dryrun
+		conf.Modules[i].ApplyChanges = *applyChanges
 		conf.Modules[i].LdapCli = cli
 		conf.Modules[i].Notify.Channel = notifchan
 	}

@@ -171,7 +171,7 @@ func (r *run) createIamUser(uid string) {
 		log.Printf("[error] aws: couldn't find email of user %q in ldap, notification not sent: %v", uid, err)
 		return
 	}
-	if r.Conf.DryRun {
+	if !r.Conf.ApplyChanges {
 		log.Printf("[dryrun] aws: would have created AWS IAM user %q with password %q", uid, password)
 		goto notify
 	}
@@ -240,7 +240,7 @@ func (r *run) addUserToIamGroup(uid, group string) {
 	if !r.Conf.Create {
 		return
 	}
-	if r.Conf.DryRun {
+	if !r.Conf.ApplyChanges {
 		log.Printf("[dryrun] aws: would have added AWS IAM user %q to group %q", uid, group)
 		return
 	}
@@ -264,7 +264,7 @@ func (r *run) removeIamUser(uid string) {
 	if !r.Conf.Delete {
 		return
 	}
-	if r.Conf.DryRun {
+	if !r.Conf.ApplyChanges {
 		log.Printf("[dryrun] aws: would have deleted AWS IAM user %q", uid)
 		goto notify
 	}

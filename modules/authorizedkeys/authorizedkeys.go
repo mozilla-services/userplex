@@ -119,7 +119,7 @@ func (r *run) deleteMarkedFiles() (err error) {
 		scanner := bufio.NewScanner(fd)
 		for scanner.Scan() {
 			if strings.Contains(scanner.Text(), "deletionmarker="+r.p.DeletionMarker) {
-				if r.Conf.DryRun {
+				if !r.Conf.ApplyChanges {
 					log.Printf("[dryrun] would have deleted %q", file)
 					continue
 				}
@@ -141,7 +141,7 @@ func (r *run) openDestFiles(userkeys map[string][]string) (destfiles map[string]
 	for uid, _ := range userkeys {
 		dest := strings.Replace(r.p.Destination, "{ldap:uid}", uid, -1)
 		if _, ok := destfiles[dest]; !ok {
-			if r.Conf.DryRun {
+			if !r.Conf.ApplyChanges {
 				log.Println("[dryrun] would have created", dest)
 				continue
 			}
@@ -164,7 +164,7 @@ func (r *run) writePubKeys(userkeys map[string][]string, destfiles map[string]*o
 	sort.Strings(uids)
 	for _, uid := range uids {
 		dest := strings.Replace(r.p.Destination, "{ldap:uid}", uid, -1)
-		if r.Conf.DryRun {
+		if !r.Conf.ApplyChanges {
 			log.Printf("[dryrun] would have written pubkey of %q into %q", uid, dest)
 			continue
 		}
