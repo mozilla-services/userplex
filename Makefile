@@ -30,7 +30,8 @@ test:
 	$(GO) test github.com/mozilla-services/userplex
 
 lint:
-	golint $(PROJECT)
+	golint .
+	golint modules/...
 
 vet:
 	$(GO) vet $(PROJECT)

@@ -95,7 +95,7 @@ func (r *run) findLdapUsers() (ldapmails []string, err error) {
 		// apply the uid map: only store the translated uid in the ldapuid
 		for _, mapping := range r.Conf.UidMap {
 			if mapping.LdapUid == mail {
-				mail = mapping.UsedUid
+				mail = mapping.LocalUID
 			}
 		}
 		ldapmails = append(ldapmails, mail)

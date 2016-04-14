@@ -45,8 +45,8 @@ type conf struct {
 		}
 	}
 	UIDMap []struct {
-		LdapUID string
-		UsedUID string
+		LdapUID  string
+		LocalUID string
 	}
 
 	Modules []modules.Configuration
@@ -80,9 +80,6 @@ func main() {
 	if *drynotif {
 		*dryrun = true
 	}
-	// safeguard, remove in prod
-	*dryrun = true
-	*drynotif = true
 
 	// load the local configuration file
 	fd, err := ioutil.ReadFile(*config)

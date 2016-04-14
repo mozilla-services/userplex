@@ -113,7 +113,7 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 		// apply the uid map: only store the translated uid in the ldapuid
 		for _, mapping := range r.Conf.UidMap {
 			if mapping.LdapUid == uid {
-				uid = mapping.UsedUid
+				uid = mapping.LocalUID
 			}
 		}
 		lgm[uid] = true

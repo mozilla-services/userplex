@@ -69,15 +69,15 @@ some instance, you may want to use a different login name, which is where UID
 Maps come in handy.
 
 A UID map is just a mapping between a LDAP UID `ldapuid` and an effective UID
-`useduid`. The map is defined with a custom name and references in modules.
+`localuid`. The map is defined with a custom name and references in modules.
 
 ```yaml
 mycustomawsuidmap1: &CUSTOMMAP1
     - ldapuid: bkelso
-      useduid: bob
+      localuid: bob
 
     - ldapuid: tanderson
-      useduid: neo
+      localuid: neo
 
 modules:
     - name: authorizedkeys
@@ -229,7 +229,7 @@ func (r *run) Run() (err error) {
 		// apply the uid map: only store the translated uid in the ldapuid
 		for _, mapping := range r.Conf.UidMap {
 			if mapping.LdapUid == uid {
-				uid = mapping.UsedUid
+				uid = mapping.LocalUID
 			}
 		}
 		ldapers[uid] = true

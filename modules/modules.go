@@ -40,8 +40,8 @@ type Notification struct {
 }
 
 type umap struct {
-	LdapUid string `yaml:"ldapuid",json:"ldapuid"`
-	UsedUid string `yaml:"useduid",json:"useduid"`
+	LdapUid  string `yaml:"ldapuid",json:"ldapuid"`
+	LocalUID string `yaml:"localuid",json:"localuid"`
 }
 
 // A module implements this interface

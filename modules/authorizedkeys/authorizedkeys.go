@@ -87,7 +87,7 @@ func (r *run) getUserKeys(users []string) (userkeys map[string][]string) {
 		// apply the uid map: only store the translated uid in the userkeys
 		for _, mapping := range r.Conf.UidMap {
 			if mapping.LdapUid == uid {
-				uid = mapping.UsedUid
+				uid = mapping.LocalUID
 			}
 		}
 		userkeys[uid], err = r.Conf.LdapCli.GetUserSSHPublicKeys(shortdn)

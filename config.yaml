@@ -32,13 +32,13 @@ notifications:
             user: "AKIAI3TZL"
             pass: "AoXAy......"
 
-# A UID map translates a ldapuid into a useduid
+# A UID map translates a ldapuid into a localuid
 mycustomawsuidmap1: &CUSTOMMAP1
     - ldapuid: bkelso
-      useduid: bob
+      localuid: bob
 
     - ldapuid: tanderson
-      useduid: neo
+      localuid: neo
 
 modules:
 
