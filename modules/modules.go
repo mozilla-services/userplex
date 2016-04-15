@@ -13,22 +13,23 @@ import (
 
 // Configuration holds module specific parameters
 type Configuration struct {
-	Name         string         `yaml:"name",json:"name"`
-	LdapGroups   []string       `yaml:"ldapgroups",json:"ldapgroups"`
-	UidMap       []umap         `yaml:"uidmap",json:"uidmap"`
-	Create       bool           `yaml:"create",json:"create"`
-	Delete       bool           `yaml:"delete",json:"delete"`
-	Notify       NotifyConf     `yaml:"notify",json:"notify"`
-	Credentials  interface{}    `yaml:"credentials",json:"credentials"`
-	Parameters   interface{}    `yaml:"parameters",json:"parameters"`
-	ApplyChanges bool           `yaml:"applychanges",json:"applychanges"`
-	LdapCli      mozldap.Client `yaml:"-",json:"-"`
+	Name         string         `yaml:"name" json:"name"`
+	LdapGroups   []string       `yaml:"ldapgroups" json:"ldapgroups"`
+	UidMap       []umap         `yaml:"uidmap" json:"uidmap"`
+	Create       bool           `yaml:"create" json:"create"`
+	Delete       bool           `yaml:"delete" json:"delete"`
+	Notify       NotifyConf     `yaml:"notify" json:"notify"`
+	Credentials  interface{}    `yaml:"credentials" json:"credentials"`
+	Parameters   interface{}    `yaml:"parameters" json:"parameters"`
+	ApplyChanges bool           `yaml:"applychanges" json:"applychanges"`
+	NotifyUsers  bool           `yaml:"notifyusers" json:"notifyusers"`
+	LdapCli      mozldap.Client `yaml:"-" json:"-"`
 }
 
 type NotifyConf struct {
-	Mode      string            `yaml:"mode",json:"mode"`
-	Recipient string            `yaml:"recipient",json:"recipient"`
-	Channel   chan Notification `yaml:"-",json:"-"`
+	Mode      string            `yaml:"mode" json:"mode"`
+	Recipient string            `yaml:"recipient" json:"recipient"`
+	Channel   chan Notification `yaml:"-" json:"-"`
 }
 
 type Notification struct {
@@ -40,8 +41,8 @@ type Notification struct {
 }
 
 type umap struct {
-	LdapUid  string `yaml:"ldapuid",json:"ldapuid"`
-	LocalUID string `yaml:"localuid",json:"localuid"`
+	LdapUid  string `yaml:"ldapuid" json:"ldapuid"`
+	LocalUID string `yaml:"localuid" json:"localuid"`
 }
 
 // A module implements this interface

@@ -149,13 +149,20 @@ PGP block below to a file and decrypting it with "gpg -d file.asc".
 To: %s
 Cc: %s
 Reply-to: %s
-Subject: Userplex account changes
+Subject: %s
 Date: %s
 
 %s
 %s
-`, conf.Notifications.Email.From, rcpt, conf.Notifications.Email.Cc, conf.Notifications.Email.ReplyTo,
-			time.Now().Format("Mon, 2 Jan 2006 15:04:05 -0700"), prefix, body)),
+`,
+			conf.Notifications.Email.From,
+			rcpt,
+			conf.Notifications.Email.Cc,
+			conf.Notifications.Email.ReplyTo,
+			conf.Notifications.Email.Subject,
+			time.Now().Format("Mon, 2 Jan 2006 15:04:05 -0700"),
+			prefix,
+			body)),
 	)
 	if err != nil {
 		panic(err)

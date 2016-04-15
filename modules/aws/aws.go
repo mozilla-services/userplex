@@ -67,21 +67,23 @@ func (r *run) Run() (err error) {
 		return fmt.Errorf("failed to connect to aws using access key %q", r.c.AccessKey)
 	}
 	// Retrieve a list of ldap users from the groups configured
-	// and create or add the users to groups.
 	ldapers := r.getLdapers()
-	for uid, haspubkey := range ldapers {
-		resp, err := r.cli.GetUser(&iam.GetUserInput{
-			UserName: aws.String(uid),
-		})
-		if err != nil || resp == nil {
-			log.Printf("[info] aws: user %q not found, needs to be created", uid)
-			if !haspubkey {
-				log.Printf("[warning] aws: skipping creation of user %q because of missing PGP public key", uid)
-				continue
+	// create or add the users to groups.
+	if r.Conf.Create {
+		for uid, haspubkey := range ldapers {
+			resp, err := r.cli.GetUser(&iam.GetUserInput{
+				UserName: aws.String(uid),
+			})
+			if err != nil || resp == nil {
+				log.Printf("[info] aws: user %q not found, needs to be created", uid)
+				if !haspubkey && r.Conf.NotifyUsers {
+					log.Printf("[warning] aws: %q has no PGP fingerprint in LDAP, skipping creation", uid)
+					continue
+				}
+				r.createIamUser(uid)
+			} else {
+				r.updateUserGroups(uid)
 			}
-			r.createIamUser(uid)
-		} else {
-			r.updateUserGroups(uid)
 		}
 	}
 	// find which users are no longer in ldap and needs to be removed from aws
@@ -117,12 +119,14 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 			}
 		}
 		lgm[uid] = true
-		// make sure we can find a PGP public key for the user to encrypt the notification
-		// if no pubkey is found, log an error and set the user's entry to False
-		_, err = r.Conf.LdapCli.GetUserPGPKey(shortdn)
-		if err != nil {
-			log.Printf("[warning] aws: no pgp public key could be found for %s: %v", shortdn, err)
-			lgm[uid] = false
+		if r.Conf.NotifyUsers {
+			// make sure we can find a PGP public key for the user to encrypt the notification
+			// if no pubkey is found, log an error and set the user's entry to False
+			_, err = r.Conf.LdapCli.GetUserPGPKey(shortdn)
+			if err != nil {
+				log.Printf("[warning] aws: no pgp public key could be found for %s: %v", shortdn, err)
+				lgm[uid] = false
+			}
 		}
 	}
 	return
@@ -162,9 +166,6 @@ func (r *run) createIamUser(uid string) {
 		cuo  *iam.CreateUserOutput
 		clpo *iam.CreateLoginProfileOutput
 	)
-	if !r.Conf.Create {
-		return
-	}
 	password := "P" + randToken() + "%"
 	mail, err := r.Conf.LdapCli.GetUserEmailByUid(uid)
 	if err != nil {

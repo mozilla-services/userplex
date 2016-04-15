@@ -39,9 +39,10 @@ type conf struct {
 	}
 	Notifications struct {
 		Email struct {
-			Host, From, Cc, ReplyTo string
-			Port                    int
-			Auth                    struct {
+			Host, From, Cc,
+			ReplyTo, Subject string
+			Port int
+			Auth struct {
 				User, Pass string
 			}
 		}
@@ -165,6 +166,7 @@ func run(conf conf) {
 	// in the configuration of each module
 	for i := range conf.Modules {
 		conf.Modules[i].ApplyChanges = *applyChanges
+		conf.Modules[i].NotifyUsers = *notifyUsers
 		conf.Modules[i].LdapCli = cli
 		conf.Modules[i].Notify.Channel = notifchan
 	}
