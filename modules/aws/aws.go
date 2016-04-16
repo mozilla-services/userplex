@@ -265,10 +265,34 @@ func (r *run) removeIamUser(uid string) {
 	if !r.Conf.Delete {
 		return
 	}
-	if !r.Conf.ApplyChanges {
-		log.Printf("[dryrun] aws: would have deleted AWS IAM user %q", uid)
-		goto notify
+	// remove all user's access keys
+	lakfu, err := r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
+		UserName: aws.String(uid),
+	})
+	if err != nil || lakfu == nil {
+		log.Printf("[error] aws: failed to list access keys for user %q: %v", uid, err)
+		return
 	}
+	for _, accesskey := range lakfu.AccessKeyMetadata {
+		keyid := strings.Replace(awsutil.Prettify(accesskey.AccessKeyId), `"`, ``, -1)
+		if !r.Conf.ApplyChanges {
+			log.Printf("[dryrun] aws: would have removed access key id %q of user %q", keyid, uid)
+			continue
+		}
+		daki := &iam.DeleteAccessKeyInput{
+			AccessKeyId: accesskey.AccessKeyId,
+			UserName:    aws.String(uid),
+		}
+		resp, err := r.cli.DeleteAccessKey(daki)
+		if err != nil || resp == nil {
+			log.Printf("[error] aws: failed to delete access key %q of user %q: %v. request was %q.",
+				keyid, uid, err, daki.String())
+		} else {
+			log.Printf("[info] aws: deleted access key %q of user %q", keyid, uid)
+		}
+
+	}
+	// remove the user from all IAM groups
 	lgfu, err = r.cli.ListGroupsForUser(&iam.ListGroupsForUserInput{
 		UserName: aws.String(uid),
 	})
@@ -277,24 +301,33 @@ func (r *run) removeIamUser(uid string) {
 		return
 	}
 	// iterate through the groups and find the missing ones
-	for _, iamgroup := range r.p.IamGroups {
-		resp, err := r.cli.RemoveUserFromGroup(&iam.RemoveUserFromGroupInput{
-			GroupName: &iamgroup,
+	for _, iamgroup := range lgfu.Groups {
+		gname := strings.Replace(awsutil.Prettify(iamgroup.GroupName), `"`, ``, -1)
+		if !r.Conf.ApplyChanges {
+			log.Printf("[dryrun] aws: would have removed user %q from group %q", uid, gname)
+			continue
+		}
+		rufgi := &iam.RemoveUserFromGroupInput{
+			GroupName: iamgroup.GroupName,
 			UserName:  aws.String(uid),
-		})
-		gname := strings.Replace(awsutil.Prettify(iamgroup), `"`, ``, -1)
+		}
+		resp, err := r.cli.RemoveUserFromGroup(rufgi)
 		if err != nil || resp == nil {
-			log.Printf("[error] aws: failed to remove user %q from group %q: %v", uid, gname, err)
+			log.Printf("[error] aws: failed to remove user %q from group %q: %v. request was %q.",
+				uid, gname, err, rufgi.String())
 		} else {
 			log.Printf("[info] aws: removed user %q from group %q", uid, gname)
 		}
+	}
+	if !r.Conf.ApplyChanges {
+		log.Printf("[dryrun] aws: would have deleted AWS IAM user %q", uid)
+		goto notify
 	}
 	dlpo, err = r.cli.DeleteLoginProfile(&iam.DeleteLoginProfileInput{
 		UserName: aws.String(uid),
 	})
 	if err != nil || dlpo == nil {
-		log.Printf("[error] aws: failed to delete aws login profile for user %q: %v", uid, err)
-		return
+		log.Printf("[info] aws: user %q did not have an aws login profile to delete", uid)
 	}
 	duo, err = r.cli.DeleteUser(&iam.DeleteUserInput{
 		UserName: aws.String(uid),
@@ -302,6 +335,8 @@ func (r *run) removeIamUser(uid string) {
 	if err != nil || duo == nil {
 		log.Printf("[error] aws: failed to delete aws user %q: %v", uid, err)
 		return
+	} else {
+		log.Printf("[info] aws: deleted user %q", uid)
 	}
 notify:
 	// notify user
