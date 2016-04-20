@@ -23,8 +23,14 @@ func processNotifications(conf conf, notifchan chan modules.Notification, notifd
 	defer func() {
 		notifdone <- true
 	}()
+	ncount := 0
 	smtpaggrnotif := make(map[string][]modules.Notification)
 	for n := range notifchan {
+		if !*notifyUsers {
+			log.Printf("[info] ignoring notification to %q, user notifications are disabled\n",
+				n.Recipient)
+			continue
+		}
 		log.Println("[info] got notification for", n.Recipient, "from module", n.Module)
 		switch n.Mode {
 		case "smtp":
@@ -32,6 +38,7 @@ func processNotifications(conf conf, notifchan chan modules.Notification, notifd
 				var ntfs []modules.Notification
 				ntfs = append(ntfs, n)
 				smtpaggrnotif[n.Recipient] = ntfs
+				ncount++
 			} else {
 				smtpaggrnotif[n.Recipient] = append(smtpaggrnotif[n.Recipient], n)
 			}
@@ -39,8 +46,10 @@ func processNotifications(conf conf, notifchan chan modules.Notification, notifd
 			log.Println("[error] userplex does not support notification type ", n.Mode)
 		}
 	}
-	log.Println("[info] all notifications have been received, proceeding with sending.")
-	sendEmailNotifications(conf, smtpaggrnotif)
+	if ncount > 0 {
+		log.Println("[info] all notifications have been received, proceeding with sending.")
+		sendEmailNotifications(conf, smtpaggrnotif)
+	}
 }
 
 func sendEmailNotifications(conf conf, smtpaggrnotif map[string][]modules.Notification) {
@@ -50,7 +59,7 @@ func sendEmailNotifications(conf conf, smtpaggrnotif map[string][]modules.Notifi
 			mustEncrypt = false
 			err         error
 		)
-		log.Println("[info] sending", len(ntfs), "notifications to recipient", rcpt)
+		log.Println("[info] preparing", len(ntfs), "notifications to recipient", rcpt)
 		for _, notif := range ntfs {
 			body = append(body, []byte(fmt.Sprintf("----- %s -----\n%s\n", notif.Module, notif.Body))...)
 			if notif.MustEncrypt {
@@ -65,15 +74,14 @@ func sendEmailNotifications(conf conf, smtpaggrnotif map[string][]modules.Notifi
 				continue
 			}
 		}
-		if !*applyChanges && *notifyUsers {
-			log.Printf("[dryrun] would have sent email notification to %q with body\n%s\n", rcpt, body)
-			continue
-		}
 		if *applyChanges && *notifyUsers {
 			err = sendMail(conf, body, rcpt)
 			if err != nil {
 				log.Println("[error] failed to send email notification to", rcpt, ": %v", err)
 			}
+		} else {
+			log.Printf("[dryrun] would have sent email notification to %q with body\n%s\n", rcpt, body)
+			continue
 		}
 	}
 }
