@@ -89,7 +89,7 @@ func (r *run) findLdapUsers() (ldapmails []string, err error) {
 		shortdn := strings.Split(user, ",")[0]
 		mail, err := r.Conf.LdapCli.GetUserEmail(shortdn)
 		if err != nil {
-			log.Printf("[error] can't get email of user %q: %v", shortdn, err)
+			log.Printf("[error] datadog: can't get email of user %q: %v", shortdn, err)
 			continue
 		}
 		// apply the uid map: only store the translated uid in the ldapuid
@@ -106,15 +106,15 @@ func (r *run) findLdapUsers() (ldapmails []string, err error) {
 func (r *run) create(ldapmails []string, ddusers []datadog.User) (err error) {
 	var newusers []string
 	for _, ldapmail := range ldapmails {
-		found := false
+		isInDatadog := false
 		for _, dduser := range ddusers {
 			if ldapmail == dduser.Handle {
-				found = true
+				isInDatadog = true
 				break
 			}
 		}
-		if !found {
-			log.Printf("[info] user %q was not found in datadog. needs inviting.", ldapmail)
+		if !isInDatadog {
+			log.Printf("[info] datadog: user %q was not found in datadog. needs inviting.", ldapmail)
 			newusers = append(newusers, ldapmail)
 			// notify user
 			rcpt := r.Conf.Notify.Recipient
@@ -131,11 +131,11 @@ func (r *run) create(ldapmails []string, ddusers []datadog.User) (err error) {
 		}
 	}
 	if !r.Conf.ApplyChanges {
-		log.Printf("[dryrun] would have invited %d users to datadog", len(newusers))
+		log.Printf("[dryrun] datadog: would have invited %d users to datadog", len(newusers))
 	} else {
 		err = r.dcli.InviteUsers(newusers)
 		if err != nil {
-			log.Printf("[error] failed to invite datadog users: %v", err)
+			log.Printf("[error] datadog: failed to invite datadog users: %v", err)
 		}
 	}
 	return
@@ -146,24 +146,24 @@ func (r *run) delete(ldapmails []string, ddusers []datadog.User) (err error) {
 		if dduser.Disabled {
 			continue
 		}
-		found := false
+		isInLDAP := false
 		for _, ldapmail := range ldapmails {
 			if dduser.Handle == ldapmail {
-				found = true
+				isInLDAP = true
 				break
 			}
 		}
-		if !found {
-			if !r.Conf.ApplyChanges {
-				log.Printf("[dryrun] would have disabled user %q from datadog", dduser.Handle)
-				goto notify
+		if !isInLDAP {
+			// user is not in ldap and should be disabled from datadog
+			if r.Conf.ApplyChanges {
+				dduser.Disabled = true
+				err = r.dcli.UpdateUser(dduser)
+				if err != nil {
+					log.Printf("[error] datadog: failed to disabled datadog user %q: %v", dduser.Handle)
+				}
+			} else {
+				log.Printf("[dryrun] datadog: would have disabled user %q from datadog", dduser.Handle)
 			}
-			dduser.Disabled = true
-			err = r.dcli.UpdateUser(dduser)
-			if err != nil {
-				log.Printf("[error] failed to disabled datadog user %q: %v", dduser.Handle)
-			}
-		notify:
 			// notify user
 			rcpt := r.Conf.Notify.Recipient
 			if rcpt == "{ldap:mail}" {
@@ -173,10 +173,9 @@ func (r *run) delete(ldapmails []string, ddusers []datadog.User) (err error) {
 				Module:      "datadog",
 				Recipient:   rcpt,
 				Mode:        r.Conf.Notify.Mode,
-				Body:        []byte(fmt.Sprintf(`User %s has been removed from Datadog.`, dduser.Handle)),
+				Body:        []byte(fmt.Sprintf(`User %s has been disabled from Datadog.`, dduser.Handle)),
 				MustEncrypt: false,
 			}
-
 		}
 	}
 	return
