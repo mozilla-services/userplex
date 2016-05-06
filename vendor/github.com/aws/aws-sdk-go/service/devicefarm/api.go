@@ -348,6 +348,12 @@ func (c *DeviceFarm) GetOfferingStatusRequest(input *GetOfferingStatusInput) (re
 		Name:       opGetOfferingStatus,
 		HTTPMethod: "POST",
 		HTTPPath:   "/",
+		Paginator: &request.Paginator{
+			InputTokens:     []string{"nextToken"},
+			OutputTokens:    []string{"nextToken"},
+			LimitToken:      "",
+			TruncationToken: "",
+		},
 	}
 
 	if input == nil {
@@ -370,6 +376,14 @@ func (c *DeviceFarm) GetOfferingStatus(input *GetOfferingStatusInput) (*GetOffer
 	req, out := c.GetOfferingStatusRequest(input)
 	err := req.Send()
 	return out, err
+}
+
+func (c *DeviceFarm) GetOfferingStatusPages(input *GetOfferingStatusInput, fn func(p *GetOfferingStatusOutput, lastPage bool) (shouldContinue bool)) error {
+	page, _ := c.GetOfferingStatusRequest(input)
+	page.Handlers.Build.PushBack(request.MakeAddToUserAgentFreeFormHandler("Paginator"))
+	return page.EachPage(func(p interface{}, lastPage bool) bool {
+		return fn(p.(*GetOfferingStatusOutput), lastPage)
+	})
 }
 
 const opGetProject = "GetProject"
@@ -679,6 +693,12 @@ func (c *DeviceFarm) ListOfferingTransactionsRequest(input *ListOfferingTransact
 		Name:       opListOfferingTransactions,
 		HTTPMethod: "POST",
 		HTTPPath:   "/",
+		Paginator: &request.Paginator{
+			InputTokens:     []string{"nextToken"},
+			OutputTokens:    []string{"nextToken"},
+			LimitToken:      "",
+			TruncationToken: "",
+		},
 	}
 
 	if input == nil {
@@ -703,6 +723,14 @@ func (c *DeviceFarm) ListOfferingTransactions(input *ListOfferingTransactionsInp
 	return out, err
 }
 
+func (c *DeviceFarm) ListOfferingTransactionsPages(input *ListOfferingTransactionsInput, fn func(p *ListOfferingTransactionsOutput, lastPage bool) (shouldContinue bool)) error {
+	page, _ := c.ListOfferingTransactionsRequest(input)
+	page.Handlers.Build.PushBack(request.MakeAddToUserAgentFreeFormHandler("Paginator"))
+	return page.EachPage(func(p interface{}, lastPage bool) bool {
+		return fn(p.(*ListOfferingTransactionsOutput), lastPage)
+	})
+}
+
 const opListOfferings = "ListOfferings"
 
 // ListOfferingsRequest generates a request for the ListOfferings operation.
@@ -711,6 +739,12 @@ func (c *DeviceFarm) ListOfferingsRequest(input *ListOfferingsInput) (req *reque
 		Name:       opListOfferings,
 		HTTPMethod: "POST",
 		HTTPPath:   "/",
+		Paginator: &request.Paginator{
+			InputTokens:     []string{"nextToken"},
+			OutputTokens:    []string{"nextToken"},
+			LimitToken:      "",
+			TruncationToken: "",
+		},
 	}
 
 	if input == nil {
@@ -733,6 +767,14 @@ func (c *DeviceFarm) ListOfferings(input *ListOfferingsInput) (*ListOfferingsOut
 	req, out := c.ListOfferingsRequest(input)
 	err := req.Send()
 	return out, err
+}
+
+func (c *DeviceFarm) ListOfferingsPages(input *ListOfferingsInput, fn func(p *ListOfferingsOutput, lastPage bool) (shouldContinue bool)) error {
+	page, _ := c.ListOfferingsRequest(input)
+	page.Handlers.Build.PushBack(request.MakeAddToUserAgentFreeFormHandler("Paginator"))
+	return page.EachPage(func(p interface{}, lastPage bool) bool {
+		return fn(p.(*ListOfferingsOutput), lastPage)
+	})
 }
 
 const opListProjects = "ListProjects"
@@ -1207,8 +1249,12 @@ type AccountSettings struct {
 	// The AWS account number specified in the AccountSettings container.
 	AwsAccountNumber *string `locationName:"awsAccountNumber" min:"2" type:"string"`
 
-	// Returns the unmetered devices you have purchased.
+	// Returns the unmetered devices you have purchased or want to purchase.
 	UnmeteredDevices map[string]*int64 `locationName:"unmeteredDevices" type:"map"`
+
+	// Returns the unmetered remote access devices you have purchased or want to
+	// purchase.
+	UnmeteredRemoteAccessDevices map[string]*int64 `locationName:"unmeteredRemoteAccessDevices" type:"map"`
 }
 
 // String returns the string representation
@@ -1391,6 +1437,28 @@ func (s CreateDevicePoolInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *CreateDevicePoolInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "CreateDevicePoolInput"}
+	if s.Name == nil {
+		invalidParams.Add(request.NewErrParamRequired("Name"))
+	}
+	if s.ProjectArn == nil {
+		invalidParams.Add(request.NewErrParamRequired("ProjectArn"))
+	}
+	if s.ProjectArn != nil && len(*s.ProjectArn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("ProjectArn", 32))
+	}
+	if s.Rules == nil {
+		invalidParams.Add(request.NewErrParamRequired("Rules"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a create device pool request.
 type CreateDevicePoolOutput struct {
 	_ struct{} `type:"structure"`
@@ -1425,6 +1493,19 @@ func (s CreateProjectInput) String() string {
 // GoString returns the string representation
 func (s CreateProjectInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *CreateProjectInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "CreateProjectInput"}
+	if s.Name == nil {
+		invalidParams.Add(request.NewErrParamRequired("Name"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the result of a create project request.
@@ -1510,6 +1591,28 @@ func (s CreateUploadInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *CreateUploadInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "CreateUploadInput"}
+	if s.Name == nil {
+		invalidParams.Add(request.NewErrParamRequired("Name"))
+	}
+	if s.ProjectArn == nil {
+		invalidParams.Add(request.NewErrParamRequired("ProjectArn"))
+	}
+	if s.ProjectArn != nil && len(*s.ProjectArn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("ProjectArn", 32))
+	}
+	if s.Type == nil {
+		invalidParams.Add(request.NewErrParamRequired("Type"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a create upload request.
 type CreateUploadOutput struct {
 	_ struct{} `type:"structure"`
@@ -1547,6 +1650,22 @@ func (s DeleteDevicePoolInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *DeleteDevicePoolInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "DeleteDevicePoolInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a delete device pool request.
 type DeleteDevicePoolOutput struct {
 	_ struct{} `type:"structure"`
@@ -1579,6 +1698,22 @@ func (s DeleteProjectInput) String() string {
 // GoString returns the string representation
 func (s DeleteProjectInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *DeleteProjectInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "DeleteProjectInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the result of a delete project request.
@@ -1614,6 +1749,22 @@ func (s DeleteRunInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *DeleteRunInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "DeleteRunInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a delete run request.
 type DeleteRunOutput struct {
 	_ struct{} `type:"structure"`
@@ -1646,6 +1797,22 @@ func (s DeleteUploadInput) String() string {
 // GoString returns the string representation
 func (s DeleteUploadInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *DeleteUploadInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "DeleteUploadInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the result of a delete upload request.
@@ -1873,6 +2040,22 @@ func (s GetDeviceInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *GetDeviceInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "GetDeviceInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a get device request.
 type GetDeviceOutput struct {
 	_ struct{} `type:"structure"`
@@ -1946,6 +2129,25 @@ func (s GetDevicePoolCompatibilityInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *GetDevicePoolCompatibilityInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "GetDevicePoolCompatibilityInput"}
+	if s.AppArn != nil && len(*s.AppArn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("AppArn", 32))
+	}
+	if s.DevicePoolArn == nil {
+		invalidParams.Add(request.NewErrParamRequired("DevicePoolArn"))
+	}
+	if s.DevicePoolArn != nil && len(*s.DevicePoolArn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("DevicePoolArn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of describe device pool compatibility request.
 type GetDevicePoolCompatibilityOutput struct {
 	_ struct{} `type:"structure"`
@@ -1985,6 +2187,22 @@ func (s GetDevicePoolInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *GetDevicePoolInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "GetDevicePoolInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a get device pool request.
 type GetDevicePoolOutput struct {
 	_ struct{} `type:"structure"`
@@ -2019,6 +2237,22 @@ func (s GetJobInput) String() string {
 // GoString returns the string representation
 func (s GetJobInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *GetJobInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "GetJobInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the result of a get job request.
@@ -2057,6 +2291,19 @@ func (s GetOfferingStatusInput) String() string {
 // GoString returns the string representation
 func (s GetOfferingStatusInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *GetOfferingStatusInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "GetOfferingStatusInput"}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Returns the status result for a device offering.
@@ -2102,6 +2349,22 @@ func (s GetProjectInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *GetProjectInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "GetProjectInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a get project request.
 type GetProjectOutput struct {
 	_ struct{} `type:"structure"`
@@ -2137,6 +2400,22 @@ func (s GetRunInput) String() string {
 // GoString returns the string representation
 func (s GetRunInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *GetRunInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "GetRunInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the result of a get run request.
@@ -2175,6 +2454,22 @@ func (s GetSuiteInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *GetSuiteInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "GetSuiteInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a get suite request.
 type GetSuiteOutput struct {
 	_ struct{} `type:"structure"`
@@ -2211,6 +2506,22 @@ func (s GetTestInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *GetTestInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "GetTestInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a get test request.
 type GetTestOutput struct {
 	_ struct{} `type:"structure"`
@@ -2245,6 +2556,22 @@ func (s GetUploadInput) String() string {
 // GoString returns the string representation
 func (s GetUploadInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *GetUploadInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "GetUploadInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the result of a get upload request.
@@ -2325,19 +2652,19 @@ type Job struct {
 	//
 	// Allowed values include:
 	//
-	//  ERRORED: An error condition.
+	//  PENDING: A pending condition.
+	//
+	// PASSED: A passing condition.
+	//
+	// WARNED: A warning condition.
 	//
 	// FAILED: A failed condition.
 	//
 	// SKIPPED: A skipped condition.
 	//
+	// ERRORED: An error condition.
+	//
 	// STOPPED: A stopped condition.
-	//
-	// PASSED: A passing condition.
-	//
-	// PENDING: A pending condition.
-	//
-	// WARNED: A warning condition.
 	Result *string `locationName:"result" type:"string" enum:"ExecutionResult"`
 
 	// The job's start time.
@@ -2347,15 +2674,23 @@ type Job struct {
 	//
 	// Allowed values include:
 	//
-	//  COMPLETED: A completed status.
+	//  PENDING: A pending status.
 	//
-	// PENDING: A pending status.
+	// PENDING_CONCURRENCY: A pending concurrency status.
+	//
+	// PENDING_DEVICE: A pending device status.
 	//
 	// PROCESSING: A processing status.
 	//
+	// SCHEDULING: A scheduling status.
+	//
+	// PREPARING: A preparing status.
+	//
 	// RUNNING: A running status.
 	//
-	// SCHEDULING: A scheduling status.
+	// COMPLETED: A completed status.
+	//
+	// STOPPING: A stopping status.
 	Status *string `locationName:"status" type:"string" enum:"ExecutionStatus"`
 
 	// The job's stop time.
@@ -2436,6 +2771,28 @@ func (s ListArtifactsInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ListArtifactsInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ListArtifactsInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+	if s.Type == nil {
+		invalidParams.Add(request.NewErrParamRequired("Type"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a list artifacts operation.
 type ListArtifactsOutput struct {
 	_ struct{} `type:"structure"`
@@ -2490,6 +2847,25 @@ func (s ListDevicePoolsInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ListDevicePoolsInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ListDevicePoolsInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a list device pools request.
 type ListDevicePoolsOutput struct {
 	_ struct{} `type:"structure"`
@@ -2533,6 +2909,22 @@ func (s ListDevicesInput) String() string {
 // GoString returns the string representation
 func (s ListDevicesInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ListDevicesInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ListDevicesInput"}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the result of a list devices operation.
@@ -2580,6 +2972,25 @@ func (s ListJobsInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ListJobsInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ListJobsInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a list jobs request.
 type ListJobsOutput struct {
 	_ struct{} `type:"structure"`
@@ -2620,6 +3031,19 @@ func (s ListOfferingTransactionsInput) String() string {
 // GoString returns the string representation
 func (s ListOfferingTransactionsInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ListOfferingTransactionsInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ListOfferingTransactionsInput"}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Returns the transaction log of the specified offerings.
@@ -2664,6 +3088,19 @@ func (s ListOfferingsInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ListOfferingsInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ListOfferingsInput"}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the return values of the list of offerings.
 type ListOfferingsOutput struct {
 	_ struct{} `type:"structure"`
@@ -2706,6 +3143,22 @@ func (s ListProjectsInput) String() string {
 // GoString returns the string representation
 func (s ListProjectsInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ListProjectsInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ListProjectsInput"}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the result of a list projects request.
@@ -2753,6 +3206,25 @@ func (s ListRunsInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ListRunsInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ListRunsInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a list runs request.
 type ListRunsOutput struct {
 	_ struct{} `type:"structure"`
@@ -2796,6 +3268,25 @@ func (s ListSamplesInput) String() string {
 // GoString returns the string representation
 func (s ListSamplesInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ListSamplesInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ListSamplesInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the result of a list samples request.
@@ -2843,6 +3334,25 @@ func (s ListSuitesInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ListSuitesInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ListSuitesInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a list suites request.
 type ListSuitesOutput struct {
 	_ struct{} `type:"structure"`
@@ -2886,6 +3396,25 @@ func (s ListTestsInput) String() string {
 // GoString returns the string representation
 func (s ListTestsInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ListTestsInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ListTestsInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the result of a list tests request.
@@ -2933,6 +3462,25 @@ func (s ListUniqueProblemsInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ListUniqueProblemsInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ListUniqueProblemsInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of a list unique problems request.
 type ListUniqueProblemsOutput struct {
 	_ struct{} `type:"structure"`
@@ -2946,19 +3494,19 @@ type ListUniqueProblemsOutput struct {
 	//
 	// Allowed values include:
 	//
-	//  ERRORED: An error condition.
+	//  PENDING: A pending condition.
+	//
+	// PASSED: A passing condition.
+	//
+	// WARNED: A warning condition.
 	//
 	// FAILED: A failed condition.
 	//
 	// SKIPPED: A skipped condition.
 	//
+	// ERRORED: An error condition.
+	//
 	// STOPPED: A stopped condition.
-	//
-	// PASSED: A passing condition.
-	//
-	// PENDING: A pending condition.
-	//
-	// WARNED: A warning condition.
 	UniqueProblems map[string][]*UniqueProblem `locationName:"uniqueProblems" type:"map"`
 }
 
@@ -2992,6 +3540,25 @@ func (s ListUploadsInput) String() string {
 // GoString returns the string representation
 func (s ListUploadsInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ListUploadsInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ListUploadsInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+	if s.NextToken != nil && len(*s.NextToken) < 4 {
+		invalidParams.Add(request.NewErrParamMinLen("NextToken", 4))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the result of a list uploads request.
@@ -3039,6 +3606,22 @@ func (s Location) String() string {
 // GoString returns the string representation
 func (s Location) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *Location) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "Location"}
+	if s.Latitude == nil {
+		invalidParams.Add(request.NewErrParamRequired("Latitude"))
+	}
+	if s.Longitude == nil {
+		invalidParams.Add(request.NewErrParamRequired("Longitude"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // A number representing the monetary amount for an offering or transaction.
@@ -3163,19 +3746,19 @@ type Problem struct {
 	//
 	// Allowed values include:
 	//
-	//  ERRORED: An error condition.
+	//  PENDING: A pending condition.
+	//
+	// PASSED: A passing condition.
+	//
+	// WARNED: A warning condition.
 	//
 	// FAILED: A failed condition.
 	//
 	// SKIPPED: A skipped condition.
 	//
+	// ERRORED: An error condition.
+	//
 	// STOPPED: A stopped condition.
-	//
-	// PASSED: A passing condition.
-	//
-	// PENDING: A pending condition.
-	//
-	// WARNED: A warning condition.
 	Result *string `locationName:"result" type:"string" enum:"ExecutionResult"`
 
 	// Information about the associated run.
@@ -3265,6 +3848,19 @@ func (s PurchaseOfferingInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *PurchaseOfferingInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "PurchaseOfferingInput"}
+	if s.OfferingId != nil && len(*s.OfferingId) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("OfferingId", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // The result of the purchase offering (e.g., success or failure).
 type PurchaseOfferingOutput struct {
 	_ struct{} `type:"structure"`
@@ -3351,6 +3947,19 @@ func (s RenewOfferingInput) String() string {
 // GoString returns the string representation
 func (s RenewOfferingInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *RenewOfferingInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "RenewOfferingInput"}
+	if s.OfferingId != nil && len(*s.OfferingId) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("OfferingId", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // The result of a renewal offering.
@@ -3479,19 +4088,19 @@ type Run struct {
 	//
 	// Allowed values include:
 	//
-	//  ERRORED: An error condition.
+	//  PENDING: A pending condition.
+	//
+	// PASSED: A passing condition.
+	//
+	// WARNED: A warning condition.
 	//
 	// FAILED: A failed condition.
 	//
 	// SKIPPED: A skipped condition.
 	//
+	// ERRORED: An error condition.
+	//
 	// STOPPED: A stopped condition.
-	//
-	// PASSED: A passing condition.
-	//
-	// PENDING: A pending condition.
-	//
-	// WARNED: A warning condition.
 	Result *string `locationName:"result" type:"string" enum:"ExecutionResult"`
 
 	// The run's start time.
@@ -3501,15 +4110,23 @@ type Run struct {
 	//
 	// Allowed values include:
 	//
-	//  COMPLETED: A completed status.
+	//  PENDING: A pending status.
 	//
-	// PENDING: A pending status.
+	// PENDING_CONCURRENCY: A pending concurrency status.
+	//
+	// PENDING_DEVICE: A pending device status.
 	//
 	// PROCESSING: A processing status.
 	//
+	// SCHEDULING: A scheduling status.
+	//
+	// PREPARING: A preparing status.
+	//
 	// RUNNING: A running status.
 	//
-	// SCHEDULING: A scheduling status.
+	// COMPLETED: A completed status.
+	//
+	// STOPPING: A stopping status.
 	Status *string `locationName:"status" type:"string" enum:"ExecutionStatus"`
 
 	// The run's stop time.
@@ -3669,6 +4286,27 @@ func (s ScheduleRunConfiguration) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ScheduleRunConfiguration) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ScheduleRunConfiguration"}
+	if s.ExtraDataPackageArn != nil && len(*s.ExtraDataPackageArn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("ExtraDataPackageArn", 32))
+	}
+	if s.NetworkProfileArn != nil && len(*s.NetworkProfileArn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("NetworkProfileArn", 32))
+	}
+	if s.Location != nil {
+		if err := s.Location.Validate(); err != nil {
+			invalidParams.AddNested("Location", err.(request.ErrInvalidParams))
+		}
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents a request to the schedule run operation.
 type ScheduleRunInput struct {
 	_ struct{} `type:"structure"`
@@ -3700,6 +4338,44 @@ func (s ScheduleRunInput) String() string {
 // GoString returns the string representation
 func (s ScheduleRunInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ScheduleRunInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ScheduleRunInput"}
+	if s.AppArn != nil && len(*s.AppArn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("AppArn", 32))
+	}
+	if s.DevicePoolArn == nil {
+		invalidParams.Add(request.NewErrParamRequired("DevicePoolArn"))
+	}
+	if s.DevicePoolArn != nil && len(*s.DevicePoolArn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("DevicePoolArn", 32))
+	}
+	if s.ProjectArn == nil {
+		invalidParams.Add(request.NewErrParamRequired("ProjectArn"))
+	}
+	if s.ProjectArn != nil && len(*s.ProjectArn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("ProjectArn", 32))
+	}
+	if s.Test == nil {
+		invalidParams.Add(request.NewErrParamRequired("Test"))
+	}
+	if s.Configuration != nil {
+		if err := s.Configuration.Validate(); err != nil {
+			invalidParams.AddNested("Configuration", err.(request.ErrInvalidParams))
+		}
+	}
+	if s.Test != nil {
+		if err := s.Test.Validate(); err != nil {
+			invalidParams.AddNested("Test", err.(request.ErrInvalidParams))
+		}
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the result of a schedule run request.
@@ -3778,6 +4454,22 @@ func (s ScheduleRunTest) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ScheduleRunTest) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ScheduleRunTest"}
+	if s.TestPackageArn != nil && len(*s.TestPackageArn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("TestPackageArn", 32))
+	}
+	if s.Type == nil {
+		invalidParams.Add(request.NewErrParamRequired("Type"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the request to stop a specific run.
 type StopRunInput struct {
 	_ struct{} `type:"structure"`
@@ -3795,6 +4487,22 @@ func (s StopRunInput) String() string {
 // GoString returns the string representation
 func (s StopRunInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *StopRunInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "StopRunInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the results of your stop run attempt.
@@ -3841,19 +4549,19 @@ type Suite struct {
 	//
 	// Allowed values include:
 	//
-	//  ERRORED: An error condition.
+	//  PENDING: A pending condition.
+	//
+	// PASSED: A passing condition.
+	//
+	// WARNED: A warning condition.
 	//
 	// FAILED: A failed condition.
 	//
 	// SKIPPED: A skipped condition.
 	//
+	// ERRORED: An error condition.
+	//
 	// STOPPED: A stopped condition.
-	//
-	// PASSED: A passing condition.
-	//
-	// PENDING: A pending condition.
-	//
-	// WARNED: A warning condition.
 	Result *string `locationName:"result" type:"string" enum:"ExecutionResult"`
 
 	// The suite's start time.
@@ -3863,15 +4571,23 @@ type Suite struct {
 	//
 	// Allowed values include:
 	//
-	//  COMPLETED: A completed status.
+	//  PENDING: A pending status.
 	//
-	// PENDING: A pending status.
+	// PENDING_CONCURRENCY: A pending concurrency status.
+	//
+	// PENDING_DEVICE: A pending device status.
 	//
 	// PROCESSING: A processing status.
 	//
+	// SCHEDULING: A scheduling status.
+	//
+	// PREPARING: A preparing status.
+	//
 	// RUNNING: A running status.
 	//
-	// SCHEDULING: A scheduling status.
+	// COMPLETED: A completed status.
+	//
+	// STOPPING: A stopping status.
 	Status *string `locationName:"status" type:"string" enum:"ExecutionStatus"`
 
 	// The suite's stop time.
@@ -3948,19 +4664,19 @@ type Test struct {
 	//
 	// Allowed values include:
 	//
-	//  ERRORED: An error condition.
+	//  PENDING: A pending condition.
+	//
+	// PASSED: A passing condition.
+	//
+	// WARNED: A warning condition.
 	//
 	// FAILED: A failed condition.
 	//
 	// SKIPPED: A skipped condition.
 	//
+	// ERRORED: An error condition.
+	//
 	// STOPPED: A stopped condition.
-	//
-	// PASSED: A passing condition.
-	//
-	// PENDING: A pending condition.
-	//
-	// WARNED: A warning condition.
 	Result *string `locationName:"result" type:"string" enum:"ExecutionResult"`
 
 	// The test's start time.
@@ -3970,15 +4686,23 @@ type Test struct {
 	//
 	// Allowed values include:
 	//
-	//  COMPLETED: A completed status.
+	//  PENDING: A pending status.
 	//
-	// PENDING: A pending status.
+	// PENDING_CONCURRENCY: A pending concurrency status.
+	//
+	// PENDING_DEVICE: A pending device status.
 	//
 	// PROCESSING: A processing status.
 	//
+	// SCHEDULING: A scheduling status.
+	//
+	// PREPARING: A preparing status.
+	//
 	// RUNNING: A running status.
 	//
-	// SCHEDULING: A scheduling status.
+	// COMPLETED: A completed status.
+	//
+	// STOPPING: A stopping status.
 	Status *string `locationName:"status" type:"string" enum:"ExecutionStatus"`
 
 	// The test's stop time.
@@ -4080,6 +4804,22 @@ func (s UpdateDevicePoolInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *UpdateDevicePoolInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "UpdateDevicePoolInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Represents the result of an update device pool request.
 type UpdateDevicePoolOutput struct {
 	_ struct{} `type:"structure"`
@@ -4117,6 +4857,22 @@ func (s UpdateProjectInput) String() string {
 // GoString returns the string representation
 func (s UpdateProjectInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *UpdateProjectInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "UpdateProjectInput"}
+	if s.Arn == nil {
+		invalidParams.Add(request.NewErrParamRequired("Arn"))
+	}
+	if s.Arn != nil && len(*s.Arn) < 32 {
+		invalidParams.Add(request.NewErrParamMinLen("Arn", 32))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Represents the result of an update project request.
@@ -4284,6 +5040,8 @@ const (
 	ArtifactTypeApplicationCrashReport = "APPLICATION_CRASH_REPORT"
 	// @enum ArtifactType
 	ArtifactTypeXctestLog = "XCTEST_LOG"
+	// @enum ArtifactType
+	ArtifactTypeVideo = "VIDEO"
 )
 
 const (
@@ -4351,9 +5109,15 @@ const (
 	// @enum ExecutionStatus
 	ExecutionStatusPending = "PENDING"
 	// @enum ExecutionStatus
+	ExecutionStatusPendingConcurrency = "PENDING_CONCURRENCY"
+	// @enum ExecutionStatus
+	ExecutionStatusPendingDevice = "PENDING_DEVICE"
+	// @enum ExecutionStatus
 	ExecutionStatusProcessing = "PROCESSING"
 	// @enum ExecutionStatus
 	ExecutionStatusScheduling = "SCHEDULING"
+	// @enum ExecutionStatus
+	ExecutionStatusPreparing = "PREPARING"
 	// @enum ExecutionStatus
 	ExecutionStatusRunning = "RUNNING"
 	// @enum ExecutionStatus

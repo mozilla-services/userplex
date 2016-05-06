@@ -4,6 +4,7 @@
 package ecs
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/awsutil"
@@ -63,6 +64,10 @@ func (c *ECS) CreateServiceRequest(input *CreateServiceInput) (req *request.Requ
 // If the number of tasks running in a service drops below desiredCount, Amazon
 // ECS spawns another instantiation of the task in the specified cluster. To
 // update an existing service, see UpdateService.
+//
+// In addition to maintaining the desired count of tasks in your service, you
+// can optionally run your service behind a load balancer. The load balancer
+// distributes traffic across the tasks that are associated with the service.
 //
 // You can optionally specify a deployment configuration for your service.
 // During a deployment (which is triggered by changing the task definition of
@@ -211,8 +216,10 @@ func (c *ECS) DeregisterContainerInstanceRequest(input *DeregisterContainerInsta
 // but it does not terminate the EC2 instance; if you are finished using the
 // instance, be sure to terminate it in the Amazon EC2 console to stop billing.
 //
-// When you terminate a container instance, it is automatically deregistered
-// from your cluster.
+//  If you terminate a running container instance with a connected Amazon ECS
+// container agent, the agent automatically deregisters the instance from your
+// cluster (stopped container instances or instances with disconnected agents
+// are not automatically deregistered when terminated).
 func (c *ECS) DeregisterContainerInstance(input *DeregisterContainerInstanceInput) (*DeregisterContainerInstanceOutput, error) {
 	req, out := c.DeregisterContainerInstanceRequest(input)
 	err := req.Send()
@@ -419,8 +426,8 @@ func (c *ECS) DiscoverPollEndpointRequest(input *DiscoverPollEndpointInput) (req
 // This action is only used by the Amazon EC2 Container Service agent, and it
 // is not intended for use outside of the agent.
 //
-// Returns an endpoint for the Amazon EC2 Container Service agent to poll for
-// updates.
+//  Returns an endpoint for the Amazon EC2 Container Service agent to poll
+// for updates.
 func (c *ECS) DiscoverPollEndpoint(input *DiscoverPollEndpointInput) (*DiscoverPollEndpointOutput, error) {
 	req, out := c.DiscoverPollEndpointRequest(input)
 	err := req.Send()
@@ -702,7 +709,7 @@ func (c *ECS) RegisterContainerInstanceRequest(input *RegisterContainerInstanceI
 // This action is only used by the Amazon EC2 Container Service agent, and it
 // is not intended for use outside of the agent.
 //
-// Registers an EC2 instance into the specified cluster. This instance becomes
+//  Registers an EC2 instance into the specified cluster. This instance becomes
 // available to place containers on.
 func (c *ECS) RegisterContainerInstance(input *RegisterContainerInstanceInput) (*RegisterContainerInstanceOutput, error) {
 	req, out := c.RegisterContainerInstanceRequest(input)
@@ -859,7 +866,7 @@ func (c *ECS) SubmitContainerStateChangeRequest(input *SubmitContainerStateChang
 // This action is only used by the Amazon EC2 Container Service agent, and it
 // is not intended for use outside of the agent.
 //
-// Sent to acknowledge that a container changed states.
+//  Sent to acknowledge that a container changed states.
 func (c *ECS) SubmitContainerStateChange(input *SubmitContainerStateChangeInput) (*SubmitContainerStateChangeOutput, error) {
 	req, out := c.SubmitContainerStateChangeRequest(input)
 	err := req.Send()
@@ -889,7 +896,7 @@ func (c *ECS) SubmitTaskStateChangeRequest(input *SubmitTaskStateChangeInput) (r
 // This action is only used by the Amazon EC2 Container Service agent, and it
 // is not intended for use outside of the agent.
 //
-// Sent to acknowledge that a task changed states.
+//  Sent to acknowledge that a task changed states.
 func (c *ECS) SubmitTaskStateChange(input *SubmitTaskStateChangeInput) (*SubmitTaskStateChangeOutput, error) {
 	req, out := c.SubmitTaskStateChangeRequest(input)
 	err := req.Send()
@@ -922,7 +929,7 @@ func (c *ECS) UpdateContainerAgentRequest(input *UpdateContainerAgentInput) (req
 // differs depending on whether your container instance was launched with the
 // Amazon ECS-optimized AMI or another operating system.
 //
-// UpdateContainerAgent requires the Amazon ECS-optimized AMI or Amazon Linux
+//  UpdateContainerAgent requires the Amazon ECS-optimized AMI or Amazon Linux
 // with the ecs-init service installed and running. For help updating the Amazon
 // ECS container agent on other operating systems, see Manually Updating the
 // Amazon ECS Container Agent (http://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-agent-update.html#manually_update_agent)
@@ -1034,6 +1041,19 @@ func (s Attribute) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *Attribute) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "Attribute"}
+	if s.Name == nil {
+		invalidParams.Add(request.NewErrParamRequired("Name"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // A regional grouping of one or more container instances on which you can run
 // task requests. Each account receives a default cluster the first time you
 // use the Amazon ECS service, but you may also create other clusters. Clusters
@@ -1048,7 +1068,7 @@ type Cluster struct {
 	// The Amazon Resource Name (ARN) that identifies the cluster. The ARN contains
 	// the arn:aws:ecs namespace, followed by the region of the cluster, the AWS
 	// account ID of the cluster owner, the cluster namespace, and then the cluster
-	// name. For example, arn:aws:ecs:region:012345678910:cluster/test.
+	// name. For example, arn:aws:ecs:region:012345678910:cluster/test ..
 	ClusterArn *string `locationName:"clusterArn" type:"string"`
 
 	// A user-generated string that you use to identify your cluster.
@@ -1161,11 +1181,13 @@ type ContainerDefinition struct {
 	// 2 (including null), the behavior varies based on your Amazon ECS container
 	// agent version:
 	//
-	//  Agent versions less than or equal to 1.1.0: Null and zero CPU values are
+	//   Agent versions less than or equal to 1.1.0: Null and zero CPU values are
 	// passed to Docker as 0, which Docker then converts to 1,024 CPU shares. CPU
 	// values of 1 are passed to Docker as 1, which the Linux kernel converts to
-	// 2 CPU shares. Agent versions greater than or equal to 1.2.0: Null, zero,
-	// and CPU values of 1 are passed to Docker as 2.
+	// 2 CPU shares.
+	//
+	//   Agent versions greater than or equal to 1.2.0: Null, zero, and CPU values
+	// of 1 are passed to Docker as 2.
 	Cpu *int64 `locationName:"cpu" type:"integer"`
 
 	// When this parameter is true, networking is disabled within the container.
@@ -1205,7 +1227,7 @@ type ContainerDefinition struct {
 	// with the ECS_SELINUX_CAPABLE=true or ECS_APPARMOR_CAPABLE=true environment
 	// variables before containers placed on that instance can use these security
 	// options. For more information, see Amazon ECS Container Agent Configuration
-	// (http://docs.aws.amazon.com/AmazonECS/latest/developerguide/developerguide/ecs-agent-config.html)
+	// (http://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-agent-config.html)
 	// in the Amazon EC2 Container Service Developer Guide.
 	DockerSecurityOptions []*string `locationName:"dockerSecurityOptions" type:"list"`
 
@@ -1230,12 +1252,18 @@ type ContainerDefinition struct {
 	// information, such as credential data.
 	Environment []*KeyValuePair `locationName:"environment" type:"list"`
 
-	// If the essential parameter of a container is marked as true, the failure
-	// of that container stops the task. If the essential parameter of a container
-	// is marked as false, then its failure does not affect the rest of the containers
-	// in a task. If this parameter is omitted, a container is assumed to be essential.
+	// If the essential parameter of a container is marked as true, and that container
+	// fails or stops for any reason, all other containers that are part of the
+	// task are stopped. If the essential parameter of a container is marked as
+	// false, then its failure does not affect the rest of the containers in a task.
+	// If this parameter is omitted, a container is assumed to be essential.
 	//
-	//  All tasks must have at least one essential container.
+	// All tasks must have at least one essential container. If you have an application
+	// that is composed of multiple containers, you should group containers that
+	// are used for a common purpose into components, and separate the different
+	// components into multiple task definitions. For more information, see Application
+	// Architecture (http://docs.aws.amazon.com/AmazonECS/latest/developerguide/application_architecture.html)
+	// in the Amazon EC2 Container Service Developer Guide.
 	Essential *bool `locationName:"essential" type:"boolean"`
 
 	// A list of hostnames and IP address mappings to append to the /etc/hosts file
@@ -1253,7 +1281,7 @@ type ContainerDefinition struct {
 
 	// The image used to start a container. This string is passed directly to the
 	// Docker daemon. Images in the Docker Hub registry are available by default.
-	// Other repositories are specified with repository-url/image:tag. Up to 255
+	// Other repositories are specified with  repository-url/image:tag . Up to 255
 	// letters (uppercase and lowercase), numbers, hyphens, underscores, colons,
 	// periods, forward slashes, and number signs are allowed. This parameter maps
 	// to Image in the Create a container (https://docs.docker.com/reference/api/docker_remote_api_v1.19/#create-a-container)
@@ -1261,10 +1289,13 @@ type ContainerDefinition struct {
 	// and the IMAGE parameter of docker run (https://docs.docker.com/reference/commandline/run/).
 	//
 	//  Images in official repositories on Docker Hub use a single name (for example,
-	// ubuntu or mongo). Images in other repositories on Docker Hub are qualified
-	// with an organization name (for example, amazon/amazon-ecs-agent). Images
-	// in other online repositories are qualified further by a domain name (for
-	// example, quay.io/assemblyline/ubuntu).
+	// ubuntu or mongo).
+	//
+	//  Images in other repositories on Docker Hub are qualified with an organization
+	// name (for example, amazon/amazon-ecs-agent).
+	//
+	//  Images in other online repositories are qualified further by a domain name
+	// (for example, quay.io/assemblyline/ubuntu).
 	Image *string `locationName:"image" type:"string"`
 
 	// The link parameter allows containers to communicate with each other without
@@ -1275,7 +1306,7 @@ type ContainerDefinition struct {
 	// containers, see https://docs.docker.com/userguide/dockerlinks/ (https://docs.docker.com/userguide/dockerlinks/).
 	// This parameter maps to Links in the Create a container (https://docs.docker.com/reference/api/docker_remote_api_v1.19/#create-a-container)
 	// section of the Docker Remote API (https://docs.docker.com/reference/api/docker_remote_api_v1.19/)
-	// and the --link option to docker run (https://docs.docker.com/reference/commandline/run/).
+	// and the --link option to  docker run  (https://docs.docker.com/reference/commandline/run/).
 	//
 	//  Containers that are collocated on a single container instance may be able
 	// to communicate with each other without requiring links or host port mappings.
@@ -1287,17 +1318,30 @@ type ContainerDefinition struct {
 	// to LogConfig in the Create a container (https://docs.docker.com/reference/api/docker_remote_api_v1.19/#create-a-container)
 	// section of the Docker Remote API (https://docs.docker.com/reference/api/docker_remote_api_v1.19/)
 	// and the --log-driver option to docker run (https://docs.docker.com/reference/commandline/run/).
-	// Valid log drivers are displayed in the LogConfiguration data type. This parameter
-	// requires version 1.18 of the Docker Remote API or greater on your container
-	// instance. To check the Docker Remote API version on your container instance,
-	// log into your container instance and run the following command: sudo docker
-	// version | grep "Server API version"
+	// By default, containers use the same logging driver that the Docker daemon
+	// uses; however the container may use a different logging driver than the Docker
+	// daemon by specifying a log driver with this parameter in the container definition.
+	// To use a different logging driver for a container, the log system must be
+	// configured properly on the container instance (or on a different log server
+	// for remote logging options). For more information on the options for different
+	// supported log drivers, see Configure logging drivers (https://docs.docker.com/engine/admin/logging/overview/)
+	// in the Docker documentation.
+	//
+	//  Amazon ECS currently supports a subset of the logging drivers available
+	// to the Docker daemon (shown in the LogConfiguration data type). Currently
+	// unsupported log drivers may be available in future releases of the Amazon
+	// ECS container agent.
+	//
+	//  This parameter requires version 1.18 of the Docker Remote API or greater
+	// on your container instance. To check the Docker Remote API version on your
+	// container instance, log into your container instance and run the following
+	// command: sudo docker version | grep "Server API version"
 	//
 	//  The Amazon ECS container agent running on a container instance must register
 	// the logging drivers available on that instance with the ECS_AVAILABLE_LOGGING_DRIVERS
 	// environment variable before containers placed on that instance can use these
 	// log configuration options. For more information, see Amazon ECS Container
-	// Agent Configuration (http://docs.aws.amazon.com/AmazonECS/latest/developerguide/developerguide/ecs-agent-config.html)
+	// Agent Configuration (http://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-agent-config.html)
 	// in the Amazon EC2 Container Service Developer Guide.
 	LogConfiguration *LogConfiguration `locationName:"logConfiguration" type:"structure"`
 
@@ -1392,6 +1436,41 @@ func (s ContainerDefinition) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *ContainerDefinition) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "ContainerDefinition"}
+	if s.ExtraHosts != nil {
+		for i, v := range s.ExtraHosts {
+			if v == nil {
+				continue
+			}
+			if err := v.Validate(); err != nil {
+				invalidParams.AddNested(fmt.Sprintf("%s[%v]", "ExtraHosts", i), err.(request.ErrInvalidParams))
+			}
+		}
+	}
+	if s.LogConfiguration != nil {
+		if err := s.LogConfiguration.Validate(); err != nil {
+			invalidParams.AddNested("LogConfiguration", err.(request.ErrInvalidParams))
+		}
+	}
+	if s.Ulimits != nil {
+		for i, v := range s.Ulimits {
+			if v == nil {
+				continue
+			}
+			if err := v.Validate(); err != nil {
+				invalidParams.AddNested(fmt.Sprintf("%s[%v]", "Ulimits", i), err.(request.ErrInvalidParams))
+			}
+		}
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // An EC2 instance that is running the Amazon ECS agent and has been registered
 // with a cluster.
 type ContainerInstance struct {
@@ -1414,7 +1493,8 @@ type ContainerInstance struct {
 	// The Amazon Resource Name (ARN) of the container instance. The ARN contains
 	// the arn:aws:ecs namespace, followed by the region of the container instance,
 	// the AWS account ID of the container instance owner, the container-instance
-	// namespace, and then the container instance ID. For example, arn:aws:ecs:region:aws_account_id:container-instance/container_instance_ID.
+	// namespace, and then the container instance ID. For example, arn:aws:ecs:region:aws_account_id:container-instance/container_instance_ID
+	// .
 	ContainerInstanceArn *string `locationName:"containerInstanceArn" type:"string"`
 
 	// The EC2 instance ID of the container instance.
@@ -1536,9 +1616,20 @@ type CreateServiceInput struct {
 	// keep running on your cluster.
 	DesiredCount *int64 `locationName:"desiredCount" type:"integer" required:"true"`
 
-	// A list of load balancer objects, containing the load balancer name, the container
-	// name (as it appears in a container definition), and the container port to
-	// access from the load balancer.
+	// A load balancer object representing the load balancer to use with your service.
+	//
+	// For Elastic Load Balancing standard load balancers, this object must contain
+	// the load balancer name, the container name (as it appears in a container
+	// definition), and the container port to access from the load balancer. When
+	// a task from this service is placed on a container instance, the container
+	// instance is registered with the load balancer specified here.
+	//
+	// For Elastic Load Balancing application load balancers, this object must
+	// contain the load balancer target group ARN, the container name (as it appears
+	// in a container definition), and the container port to access from the load
+	// balancer. When a task from this service is placed on a container instance,
+	// the container instance and port combination is registered as a target in
+	// the target group specified here.
 	LoadBalancers []*LoadBalancer `locationName:"loadBalancers" type:"list"`
 
 	// The name or full Amazon Resource Name (ARN) of the IAM role that allows your
@@ -1567,6 +1658,25 @@ func (s CreateServiceInput) String() string {
 // GoString returns the string representation
 func (s CreateServiceInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *CreateServiceInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "CreateServiceInput"}
+	if s.DesiredCount == nil {
+		invalidParams.Add(request.NewErrParamRequired("DesiredCount"))
+	}
+	if s.ServiceName == nil {
+		invalidParams.Add(request.NewErrParamRequired("ServiceName"))
+	}
+	if s.TaskDefinition == nil {
+		invalidParams.Add(request.NewErrParamRequired("TaskDefinition"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 type CreateServiceOutput struct {
@@ -1601,6 +1711,19 @@ func (s DeleteClusterInput) String() string {
 // GoString returns the string representation
 func (s DeleteClusterInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *DeleteClusterInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "DeleteClusterInput"}
+	if s.Cluster == nil {
+		invalidParams.Add(request.NewErrParamRequired("Cluster"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 type DeleteClusterOutput struct {
@@ -1639,6 +1762,19 @@ func (s DeleteServiceInput) String() string {
 // GoString returns the string representation
 func (s DeleteServiceInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *DeleteServiceInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "DeleteServiceInput"}
+	if s.Service == nil {
+		invalidParams.Add(request.NewErrParamRequired("Service"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 type DeleteServiceOutput struct {
@@ -1742,7 +1878,8 @@ type DeregisterContainerInstanceInput struct {
 	// instance to deregister. The ARN contains the arn:aws:ecs namespace, followed
 	// by the region of the container instance, the AWS account ID of the container
 	// instance owner, the container-instance namespace, and then the container
-	// instance ID. For example, arn:aws:ecs:region:aws_account_id:container-instance/container_instance_ID.
+	// instance ID. For example, arn:aws:ecs:region:aws_account_id:container-instance/container_instance_ID
+	// .
 	ContainerInstance *string `locationName:"containerInstance" type:"string" required:"true"`
 
 	// Forces the deregistration of the container instance. If you have tasks running
@@ -1764,6 +1901,19 @@ func (s DeregisterContainerInstanceInput) String() string {
 // GoString returns the string representation
 func (s DeregisterContainerInstanceInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *DeregisterContainerInstanceInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "DeregisterContainerInstanceInput"}
+	if s.ContainerInstance == nil {
+		invalidParams.Add(request.NewErrParamRequired("ContainerInstance"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 type DeregisterContainerInstanceOutput struct {
@@ -1800,6 +1950,19 @@ func (s DeregisterTaskDefinitionInput) String() string {
 // GoString returns the string representation
 func (s DeregisterTaskDefinitionInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *DeregisterTaskDefinitionInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "DeregisterTaskDefinitionInput"}
+	if s.TaskDefinition == nil {
+		invalidParams.Add(request.NewErrParamRequired("TaskDefinition"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 type DeregisterTaskDefinitionOutput struct {
@@ -1880,6 +2043,19 @@ func (s DescribeContainerInstancesInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *DescribeContainerInstancesInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "DescribeContainerInstancesInput"}
+	if s.ContainerInstances == nil {
+		invalidParams.Add(request.NewErrParamRequired("ContainerInstances"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 type DescribeContainerInstancesOutput struct {
 	_ struct{} `type:"structure"`
 
@@ -1921,6 +2097,19 @@ func (s DescribeServicesInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *DescribeServicesInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "DescribeServicesInput"}
+	if s.Services == nil {
+		invalidParams.Add(request.NewErrParamRequired("Services"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 type DescribeServicesOutput struct {
 	_ struct{} `type:"structure"`
 
@@ -1958,6 +2147,19 @@ func (s DescribeTaskDefinitionInput) String() string {
 // GoString returns the string representation
 func (s DescribeTaskDefinitionInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *DescribeTaskDefinitionInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "DescribeTaskDefinitionInput"}
+	if s.TaskDefinition == nil {
+		invalidParams.Add(request.NewErrParamRequired("TaskDefinition"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 type DescribeTaskDefinitionOutput struct {
@@ -1999,6 +2201,19 @@ func (s DescribeTasksInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *DescribeTasksInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "DescribeTasksInput"}
+	if s.Tasks == nil {
+		invalidParams.Add(request.NewErrParamRequired("Tasks"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 type DescribeTasksOutput struct {
 	_ struct{} `type:"structure"`
 
@@ -2029,7 +2244,8 @@ type DiscoverPollEndpointInput struct {
 	// instance. The ARN contains the arn:aws:ecs namespace, followed by the region
 	// of the container instance, the AWS account ID of the container instance owner,
 	// the container-instance namespace, and then the container instance ID. For
-	// example, arn:aws:ecs:region:aws_account_id:container-instance/container_instance_ID.
+	// example, arn:aws:ecs:region:aws_account_id:container-instance/container_instance_ID
+	// .
 	ContainerInstance *string `locationName:"containerInstance" type:"string"`
 }
 
@@ -2104,6 +2320,22 @@ func (s HostEntry) String() string {
 // GoString returns the string representation
 func (s HostEntry) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *HostEntry) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "HostEntry"}
+	if s.Hostname == nil {
+		invalidParams.Add(request.NewErrParamRequired("Hostname"))
+	}
+	if s.IpAddress == nil {
+		invalidParams.Add(request.NewErrParamRequired("IpAddress"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 // Details on a container instance host volume.
@@ -2595,6 +2827,19 @@ func (s LogConfiguration) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *LogConfiguration) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "LogConfiguration"}
+	if s.LogDriver == nil {
+		invalidParams.Add(request.NewErrParamRequired("LogDriver"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 // Details on a volume mount point that is used in a container definition.
 type MountPoint struct {
 	_ struct{} `type:"structure"`
@@ -2662,7 +2907,9 @@ type PortMapping struct {
 	// The port number on the container that is bound to the user-specified or automatically
 	// assigned host port. If you specify a container port and not a host port,
 	// your container automatically receives a host port in the ephemeral port range
-	// (for more information, see hostPort).
+	// (for more information, see hostPort). Port mappings that are automatically
+	// assigned in this way do not count toward the 50 reserved ports limit of a
+	// container instance.
 	ContainerPort *int64 `locationName:"containerPort" type:"integer"`
 
 	// The port number on the container instance to reserve for your container.
@@ -2685,7 +2932,8 @@ type PortMapping struct {
 	// a task stops, the host port is released).The current reserved ports are displayed
 	// in the remainingResources of DescribeContainerInstances output, and a container
 	// instance may have up to 50 reserved ports at a time, including the default
-	// reserved ports (automatically assigned ports do not count toward this limit).
+	// reserved ports (automatically assigned ports do not count toward the 50 reserved
+	// ports limit).
 	HostPort *int64 `locationName:"hostPort" type:"integer"`
 
 	// The protocol used for the port mapping. Valid values are tcp and udp. The
@@ -2745,6 +2993,26 @@ func (s RegisterContainerInstanceInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *RegisterContainerInstanceInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "RegisterContainerInstanceInput"}
+	if s.Attributes != nil {
+		for i, v := range s.Attributes {
+			if v == nil {
+				continue
+			}
+			if err := v.Validate(); err != nil {
+				invalidParams.AddNested(fmt.Sprintf("%s[%v]", "Attributes", i), err.(request.ErrInvalidParams))
+			}
+		}
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 type RegisterContainerInstanceOutput struct {
 	_ struct{} `type:"structure"`
 
@@ -2789,6 +3057,32 @@ func (s RegisterTaskDefinitionInput) String() string {
 // GoString returns the string representation
 func (s RegisterTaskDefinitionInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *RegisterTaskDefinitionInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "RegisterTaskDefinitionInput"}
+	if s.ContainerDefinitions == nil {
+		invalidParams.Add(request.NewErrParamRequired("ContainerDefinitions"))
+	}
+	if s.Family == nil {
+		invalidParams.Add(request.NewErrParamRequired("Family"))
+	}
+	if s.ContainerDefinitions != nil {
+		for i, v := range s.ContainerDefinitions {
+			if v == nil {
+				continue
+			}
+			if err := v.Validate(); err != nil {
+				invalidParams.AddNested(fmt.Sprintf("%s[%v]", "ContainerDefinitions", i), err.(request.ErrInvalidParams))
+			}
+		}
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 type RegisterTaskDefinitionOutput struct {
@@ -2895,6 +3189,19 @@ func (s RunTaskInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *RunTaskInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "RunTaskInput"}
+	if s.TaskDefinition == nil {
+		invalidParams.Add(request.NewErrParamRequired("TaskDefinition"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 type RunTaskOutput struct {
 	_ struct{} `type:"structure"`
 
@@ -2920,8 +3227,10 @@ func (s RunTaskOutput) GoString() string {
 type Service struct {
 	_ struct{} `type:"structure"`
 
-	// The Amazon Resource Name (ARN) of the of the cluster that hosts the service.
+	// The Amazon Resource Name (ARN) of the cluster that hosts the service.
 	ClusterArn *string `locationName:"clusterArn" type:"string"`
+
+	CreatedAt *time.Time `locationName:"createdAt" type:"timestamp" timestampFormat:"unix"`
 
 	// Optional deployment parameters that control how many tasks run during the
 	// deployment and the ordering of stopping and starting tasks.
@@ -2939,9 +3248,9 @@ type Service struct {
 	// are displayed.
 	Events []*ServiceEvent `locationName:"events" type:"list"`
 
-	// A list of load balancer objects, containing the load balancer name, the container
-	// name (as it appears in a container definition), and the container port to
-	// access from the load balancer.
+	// A list of Elastic Load Balancing load balancer objects, containing the load
+	// balancer name, the container name (as it appears in a container definition),
+	// and the container port to access from the load balancer.
 	LoadBalancers []*LoadBalancer `locationName:"loadBalancers" type:"list"`
 
 	// The number of tasks in the cluster that are in the PENDING state.
@@ -2949,7 +3258,7 @@ type Service struct {
 
 	// The Amazon Resource Name (ARN) of the IAM role associated with the service
 	// that allows the Amazon ECS container agent to register container instances
-	// with a load balancer.
+	// with an Elastic Load Balancing load balancer.
 	RoleArn *string `locationName:"roleArn" type:"string"`
 
 	// The number of tasks in the cluster that are in the RUNNING state.
@@ -2958,7 +3267,7 @@ type Service struct {
 	// The Amazon Resource Name (ARN) that identifies the service. The ARN contains
 	// the arn:aws:ecs namespace, followed by the region of the service, the AWS
 	// account ID of the service owner, the service namespace, and then the service
-	// name. For example, arn:aws:ecs:region:012345678910:service/my-service.
+	// name. For example, arn:aws:ecs:region:012345678910:service/my-service .
 	ServiceArn *string `locationName:"serviceArn" type:"string"`
 
 	// The name of your service. Up to 255 letters (uppercase and lowercase), numbers,
@@ -3062,6 +3371,22 @@ func (s StartTaskInput) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *StartTaskInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "StartTaskInput"}
+	if s.ContainerInstances == nil {
+		invalidParams.Add(request.NewErrParamRequired("ContainerInstances"))
+	}
+	if s.TaskDefinition == nil {
+		invalidParams.Add(request.NewErrParamRequired("TaskDefinition"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 type StartTaskOutput struct {
 	_ struct{} `type:"structure"`
 
@@ -3109,6 +3434,19 @@ func (s StopTaskInput) String() string {
 // GoString returns the string representation
 func (s StopTaskInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *StopTaskInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "StopTaskInput"}
+	if s.Task == nil {
+		invalidParams.Add(request.NewErrParamRequired("Task"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 type StopTaskOutput struct {
@@ -3231,7 +3569,7 @@ func (s SubmitTaskStateChangeOutput) GoString() string {
 type Task struct {
 	_ struct{} `type:"structure"`
 
-	// The Amazon Resource Name (ARN) of the of the cluster that hosts the task.
+	// The Amazon Resource Name (ARN) of the cluster that hosts the task.
 	ClusterArn *string `locationName:"clusterArn" type:"string"`
 
 	// The Amazon Resource Name (ARN) of the container instances that host the task.
@@ -3272,8 +3610,7 @@ type Task struct {
 	// The Amazon Resource Name (ARN) of the task.
 	TaskArn *string `locationName:"taskArn" type:"string"`
 
-	// The Amazon Resource Name (ARN) of the of the task definition that creates
-	// the task.
+	// The Amazon Resource Name (ARN) of the task definition that creates the task.
 	TaskDefinitionArn *string `locationName:"taskDefinitionArn" type:"string"`
 }
 
@@ -3293,7 +3630,7 @@ type TaskDefinition struct {
 
 	// A list of container definitions in JSON format that describe the different
 	// containers that make up your task. For more information about container definition
-	// parameters and defaults, see Amazon ECS Task Definitions (http://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_defintions.html)
+	// parameters and defaults, see Amazon ECS Task Definitions (http://docs.aws.amazon.com/http:/docs.aws.amazon.com/AmazonECS/latest/developerguidetask_defintions.html)
 	// in the Amazon EC2 Container Service Developer Guide.
 	ContainerDefinitions []*ContainerDefinition `locationName:"containerDefinitions" type:"list"`
 
@@ -3313,11 +3650,11 @@ type TaskDefinition struct {
 	// The status of the task definition.
 	Status *string `locationName:"status" type:"string" enum:"TaskDefinitionStatus"`
 
-	// The full Amazon Resource Name (ARN) of the of the task definition.
+	// The full Amazon Resource Name (ARN) of the task definition.
 	TaskDefinitionArn *string `locationName:"taskDefinitionArn" type:"string"`
 
 	// The list of volumes in a task. For more information about volume definition
-	// parameters and defaults, see Amazon ECS Task Definitions (http://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_defintions.html)
+	// parameters and defaults, see Amazon ECS Task Definitions (http://docs.aws.amazon.com/http:/docs.aws.amazon.com/AmazonECS/latest/developerguidetask_defintions.html)
 	// in the Amazon EC2 Container Service Developer Guide.
 	Volumes []*Volume `locationName:"volumes" type:"list"`
 }
@@ -3374,6 +3711,25 @@ func (s Ulimit) GoString() string {
 	return s.String()
 }
 
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *Ulimit) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "Ulimit"}
+	if s.HardLimit == nil {
+		invalidParams.Add(request.NewErrParamRequired("HardLimit"))
+	}
+	if s.Name == nil {
+		invalidParams.Add(request.NewErrParamRequired("Name"))
+	}
+	if s.SoftLimit == nil {
+		invalidParams.Add(request.NewErrParamRequired("SoftLimit"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
 type UpdateContainerAgentInput struct {
 	_ struct{} `type:"structure"`
 
@@ -3396,6 +3752,19 @@ func (s UpdateContainerAgentInput) String() string {
 // GoString returns the string representation
 func (s UpdateContainerAgentInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *UpdateContainerAgentInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "UpdateContainerAgentInput"}
+	if s.ContainerInstance == nil {
+		invalidParams.Add(request.NewErrParamRequired("ContainerInstance"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 type UpdateContainerAgentOutput struct {
@@ -3451,6 +3820,19 @@ func (s UpdateServiceInput) String() string {
 // GoString returns the string representation
 func (s UpdateServiceInput) GoString() string {
 	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *UpdateServiceInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "UpdateServiceInput"}
+	if s.Service == nil {
+		invalidParams.Add(request.NewErrParamRequired("Service"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
 }
 
 type UpdateServiceOutput struct {
@@ -3581,6 +3963,8 @@ const (
 	LogDriverGelf = "gelf"
 	// @enum LogDriver
 	LogDriverFluentd = "fluentd"
+	// @enum LogDriver
+	LogDriverAwslogs = "awslogs"
 )
 
 const (
