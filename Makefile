@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-PROJECT		:= github.com/mozilla-services/userplex
+PROJECT		:= go.mozilla.org/userplex
 GO 			:= GOOS=$(OS) GOARCH=$(ARCH) GO15VENDOREXPERIMENT=1 go
 GOGETTER	:= GOPATH=$(shell pwd)/.tmpdeps go get -d
 
@@ -11,10 +11,10 @@ all: test vet generate userplex
 dev: lint cyclo all
 
 userplex:
-	$(GO) install github.com/mozilla-services/userplex
+	$(GO) install $(PROJECT)
 
 go_vendor_dependencies:
-	$(GOGETTER) github.com/mozilla-services/mozldap
+	$(GOGETTER) go.mozilla.org/mozldap
 	$(GOGETTER) gopkg.in/yaml.v2
 	$(GOGETTER) github.com/aws/aws-sdk-go
 	$(GOGETTER) github.com/zorkian/go-datadog-api
@@ -29,8 +29,8 @@ go_vendor_dependencies:
 	rm -rf .tmpdeps
 
 test:
-	$(GO) test github.com/mozilla-services/userplex/modules/...
-	$(GO) test github.com/mozilla-services/userplex
+	$(GO) test $(PROJECT)/modules/...
+	$(GO) test $(PROJECT)
 
 lint:
 	golint .

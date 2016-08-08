@@ -4,7 +4,7 @@
 //
 // Contributor: Julien Vehent <ulfr@mozilla.com>
 
-package main
+package main // import "go.mozilla.org/userplex"
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/armor"
 
-	"github.com/mozilla-services/userplex/modules"
+	"go.mozilla.org/userplex/modules"
 )
 
 func processNotifications(conf conf, notifchan chan modules.Notification, notifdone chan bool) {

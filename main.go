@@ -4,7 +4,7 @@
 //
 // Contributor: Julien Vehent <ulfr@mozilla.com>
 
-package main
+package main // import "go.mozilla.org/userplex"
 
 //go:generate ./version.sh
 
@@ -19,13 +19,13 @@ import (
 	"time"
 
 	// modules
-	"github.com/mozilla-services/userplex/modules"
-	_ "github.com/mozilla-services/userplex/modules/authorizedkeys"
-	_ "github.com/mozilla-services/userplex/modules/aws"
-	_ "github.com/mozilla-services/userplex/modules/datadog"
+	"go.mozilla.org/userplex/modules"
+	_ "go.mozilla.org/userplex/modules/authorizedkeys"
+	_ "go.mozilla.org/userplex/modules/aws"
+	_ "go.mozilla.org/userplex/modules/datadog"
 
 	"github.com/gorhill/cronexpr"
-	"github.com/mozilla-services/mozldap"
+	"go.mozilla.org/mozldap"
 	"gopkg.in/yaml.v2"
 )
 

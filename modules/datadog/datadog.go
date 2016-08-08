@@ -4,15 +4,15 @@
 //
 // Contributor: Julien Vehent <ulfr@mozilla.com>
 
-package datadog
+package datadog // import "go.mozilla.org/userplex/modules/datadog"
 
 import (
 	"fmt"
 	"log"
 	"strings"
 
-	"github.com/mozilla-services/userplex/modules"
 	"github.com/zorkian/go-datadog-api"
+	"go.mozilla.org/userplex/modules"
 )
 
 func init() {

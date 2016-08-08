@@ -4,7 +4,7 @@
 //
 // Contributor: Julien Vehent <ulfr@mozilla.com>
 
-package aws
+package aws // import "go.mozilla.org/userplex/modules/aws"
 
 import (
 	"crypto/rand"
@@ -17,7 +17,7 @@ import (
 	awscred "github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/iam"
-	"github.com/mozilla-services/userplex/modules"
+	"go.mozilla.org/userplex/modules"
 )
 
 func init() {

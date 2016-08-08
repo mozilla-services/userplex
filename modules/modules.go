@@ -4,10 +4,10 @@
 //
 // Contributor: Julien Vehent <ulfr@mozilla.com>
 
-package modules
+package modules // import "go.mozilla.org/userplex/modules"
 
 import (
-	"github.com/mozilla-services/mozldap"
+	"go.mozilla.org/mozldap"
 	"gopkg.in/yaml.v2"
 )
 

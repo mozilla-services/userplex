@@ -1,4 +1,4 @@
-# Userplex [![GoDoc](https://godoc.org/github.com/mozilla-services/userplex?status.svg)](https://godoc.org/github.com/mozilla-services/userplex)
+# Userplex [![GoDoc](https://godoc.org/go.mozilla.org/userplex?status.svg)](https://godoc.org/go.mozilla.org/userplex)
 Propagate users from LDAP to Puppet, AWS, Github, Datadog, ...
 [![Build Status](https://travis-ci.org/mozilla-services/userplex.svg)](https://travis-ci.org/mozilla-services/userplex)
 
@@ -19,7 +19,7 @@ $ export PATH=$GOPATH/bin:$PATH
 To download and install userplex into `$GOPATH/bin/userplex`, run this command:
 
 ```
-$ go get github.com/mozilla-services/userplex
+$ go get go.mozilla.org/userplex
 ```
 
 ## Configuration
@@ -143,7 +143,7 @@ credentials upon creation of an account.
 
 ## Writing modules
 
-A module must import `github.com/mozilla-services/userplex/modules`.
+A module must import `go.mozilla.org/userplex/modules`.
 
 A module registers itself at runtime via its `init()` function which must
 call `modules.Register` with a module name and an instance implementing
@@ -178,7 +178,7 @@ Example with the `aws` module:
 package aws
 
 import (
-    "github.com/mozilla-services/userplex/modules"
+    "go.mozilla.org/userplex/modules"
     //... other imports
 )
 

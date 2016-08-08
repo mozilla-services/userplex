@@ -4,7 +4,7 @@
 //
 // Contributor: Julien Vehent <ulfr@mozilla.com>
 
-package authorizedkeys
+package authorizedkeys // import "go.mozilla.org/userplex/modules/authorizedkeys"
 
 import (
 	"bufio"
@@ -15,7 +15,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mozilla-services/userplex/modules"
+	"go.mozilla.org/userplex/modules"
 )
 
 func init() {

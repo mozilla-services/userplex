@@ -1,6 +1,6 @@
 FROM golang:1.5
 MAINTAINER Julien Vehent
-ENV PROJECT=github.com/mozilla-services/userplex
+ENV PROJECT=go.mozilla.org/userplex
 ENV PROJECTNAME=userplex
 ENV GO15VENDOREXPERIMENT=1
 
