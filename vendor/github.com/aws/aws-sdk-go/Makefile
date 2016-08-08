@@ -50,24 +50,24 @@ build:
 
 unit: get-deps-tests build verify
 	@echo "go test SDK and vendor packages"
-	@go test $(SDK_ONLY_PKGS)
+	@go test -tags $(SDK_ONLY_PKGS)
 
 unit-with-race-cover: get-deps-tests build verify
 	@echo "go test SDK and vendor packages"
-	@go test -v -race -cpu=1,2,4 -covermode=atomic $(SDK_ONLY_PKGS)
+	@go test -tags -race -cpu=1,2,4 $(SDK_ONLY_PKGS)
 
 integration: get-deps-tests integ-custom smoke-tests performance
 
 integ-custom:
-	go test -tags=integration ./awstesting/integration/customizations/...
+	go test -tags "integration" ./awstesting/integration/customizations/...
 
 smoke-tests: get-deps-tests
-	gucumber ./awstesting/integration/smoke
+	gucumber -go-tags "integration" ./awstesting/integration/smoke
 
 performance: get-deps-tests
-	AWS_TESTING_LOG_RESULTS=${log-detailed} AWS_TESTING_REGION=$(region) AWS_TESTING_DB_TABLE=$(table) gucumber ./awstesting/performance
+	AWS_TESTING_LOG_RESULTS=${log-detailed} AWS_TESTING_REGION=$(region) AWS_TESTING_DB_TABLE=$(table) gucumber -go-tags "integration" ./awstesting/performance
 
-sandbox-tests: sandbox-test-go14 sandbox-test-go15 sandbox-test-go15-novendorexp sandbox-test-go16 sandbox-test-gotip
+sandbox-tests: sandbox-test-go14 sandbox-test-go15 sandbox-test-go15-novendorexp sandbox-test-go16 sandbox-test-go17 sandbox-test-gotip
 
 sandbox-test-go14:
 	docker build -f ./awstesting/sandbox/Dockerfile.test.go1.4 -t "aws-sdk-go-1.4" .
@@ -85,7 +85,12 @@ sandbox-test-go16:
 	docker build -f ./awstesting/sandbox/Dockerfile.test.go1.6 -t "aws-sdk-go-1.6" .
 	docker run -t aws-sdk-go-1.6
 
+sandbox-test-go17:
+	docker build -f ./awstesting/sandbox/Dockerfile.test.go1.7 -t "aws-sdk-go-1.7" .
+	docker run -t aws-sdk-go-1.7
+
 sandbox-test-gotip:
+	@echo "Run make update-aws-golang-tip, if this test fails because missing aws-golang:tip container"
 	docker build -f ./awstesting/sandbox/Dockerfile.test.gotip -t "aws-sdk-go-tip" .
 	docker run -t aws-sdk-go-tip
 
@@ -121,7 +126,7 @@ get-deps: get-deps-tests get-deps-verify
 
 get-deps-tests:
 	@echo "go get SDK testing dependencies"
-	go get github.com/lsegal/gucumber/cmd/gucumber
+	go get github.com/gucumber/gucumber/cmd/gucumber
 	go get github.com/stretchr/testify
 	go get github.com/smartystreets/goconvey
 

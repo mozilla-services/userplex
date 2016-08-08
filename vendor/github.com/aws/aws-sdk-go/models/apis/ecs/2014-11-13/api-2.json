@@ -878,6 +878,7 @@
       "type":"structure",
       "members":{
         "familyPrefix":{"shape":"String"},
+        "status":{"shape":"TaskDefinitionFamilyStatus"},
         "nextToken":{"shape":"String"},
         "maxResults":{"shape":"BoxedInteger"}
       }
@@ -1038,6 +1039,7 @@
       ],
       "members":{
         "family":{"shape":"String"},
+        "taskRoleArn":{"shape":"String"},
         "containerDefinitions":{"shape":"ContainerDefinitions"},
         "volumes":{"shape":"VolumeList"}
       }
@@ -1245,11 +1247,20 @@
         "taskDefinitionArn":{"shape":"String"},
         "containerDefinitions":{"shape":"ContainerDefinitions"},
         "family":{"shape":"String"},
+        "taskRoleArn":{"shape":"String"},
         "revision":{"shape":"Integer"},
         "volumes":{"shape":"VolumeList"},
         "status":{"shape":"TaskDefinitionStatus"},
         "requiresAttributes":{"shape":"RequiresAttributes"}
       }
+    },
+    "TaskDefinitionFamilyStatus":{
+      "type":"string",
+      "enum":[
+        "ACTIVE",
+        "INACTIVE",
+        "ALL"
+      ]
     },
     "TaskDefinitionStatus":{
       "type":"string",
@@ -1261,7 +1272,8 @@
     "TaskOverride":{
       "type":"structure",
       "members":{
-        "containerOverrides":{"shape":"ContainerOverrides"}
+        "containerOverrides":{"shape":"ContainerOverrides"},
+        "taskRoleArn":{"shape":"String"}
       }
     },
     "Tasks":{

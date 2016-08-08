@@ -5,6 +5,8 @@
 package acme
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
@@ -41,7 +43,7 @@ c4clNj/k0Ff5Nm1izPUno4C+0IOl7br39IPmfpSuR6wH/h6iHQDqIeybjxyKvT1G
 N0rRAoGBAKGD+4ZI/E1MoJ5CXB8cDDMHagbE3cq/DtmYzE2v1DFpQYu5I4PCm5c7
 EQeIP6dZtv8IMgtGIb91QX9pXvP0aznzQKwYIA8nZgoENCPfiMTPiEDT9e/0lObO
 9XWsXpbSTsRPj0sv1rB+UzBJ0PgjK4q2zOF0sNo7b1+6nlM3BWPx
------END RSA PRIVATE KEY----
+-----END RSA PRIVATE KEY-----
 `
 
 // This thumbprint is for the testKey defined above.
@@ -108,7 +110,7 @@ func TestJWSEncodeJSON(t *testing.T) {
 	}
 }
 
-func TestJWKThumbprint(t *testing.T) {
+func TestJWKThumbprintRSA(t *testing.T) {
 	// Key example from RFC 7638
 	const base64N = "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAt" +
 		"VT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn6" +
@@ -119,21 +121,68 @@ func TestJWKThumbprint(t *testing.T) {
 	const base64E = "AQAB"
 	const expected = "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"
 
-	bytes, err := base64.RawURLEncoding.DecodeString(base64N)
+	b, err := base64.RawURLEncoding.DecodeString(base64N)
 	if err != nil {
 		t.Fatalf("Error parsing example key N: %v", err)
 	}
-	n := new(big.Int).SetBytes(bytes)
+	n := new(big.Int).SetBytes(b)
 
-	bytes, err = base64.RawURLEncoding.DecodeString(base64E)
+	b, err = base64.RawURLEncoding.DecodeString(base64E)
 	if err != nil {
 		t.Fatalf("Error parsing example key E: %v", err)
 	}
-	e := new(big.Int).SetBytes(bytes)
+	e := new(big.Int).SetBytes(b)
 
 	pub := &rsa.PublicKey{N: n, E: int(e.Uint64())}
-	th := JWKThumbprint(pub)
+	th, err := JWKThumbprint(pub)
+	if err != nil {
+		t.Error(err)
+	}
 	if th != expected {
-		t.Errorf("th = %q; want %q", th, expected)
+		t.Errorf("thumbprint = %q; want %q", th, expected)
+	}
+}
+
+func TestJWKThumbprintEC(t *testing.T) {
+	// Key example from RFC 7520
+	// expected was computed with
+	// echo -n '{"crv":"P-521","kty":"EC","x":"<base64X>","y":"<base64Y>"}' | \
+	// openssl dgst -binary -sha256 | \
+	// base64 | \
+	// tr -d '=' | tr '/+' '_-'
+	const (
+		base64X = "AHKZLLOsCOzz5cY97ewNUajB957y-C-U88c3v13nmGZx6sYl_oJXu9A5RkT" +
+			"KqjqvjyekWF-7ytDyRXYgCF5cj0Kt"
+		base64Y = "AdymlHvOiLxXkEhayXQnNCvDX4h9htZaCJN34kfmC6pV5OhQHiraVySsUda" +
+			"QkAgDPrwQrJmbnX9cwlGfP-HqHZR1"
+		expected = "dHri3SADZkrush5HU_50AoRhcKFryN-PI6jPBtPL55M"
+	)
+
+	b, err := base64.RawURLEncoding.DecodeString(base64X)
+	if err != nil {
+		t.Fatalf("Error parsing example key X: %v", err)
+	}
+	x := new(big.Int).SetBytes(b)
+
+	b, err = base64.RawURLEncoding.DecodeString(base64Y)
+	if err != nil {
+		t.Fatalf("Error parsing example key Y: %v", err)
+	}
+	y := new(big.Int).SetBytes(b)
+
+	pub := &ecdsa.PublicKey{Curve: elliptic.P521(), X: x, Y: y}
+	th, err := JWKThumbprint(pub)
+	if err != nil {
+		t.Error(err)
+	}
+	if th != expected {
+		t.Errorf("thumbprint = %q; want %q", th, expected)
+	}
+}
+
+func TestJWKThumbprintErrUnsupportedKey(t *testing.T) {
+	_, err := JWKThumbprint(struct{}{})
+	if err != ErrUnsupportedKey {
+		t.Errorf("err = %q; want %q", err, ErrUnsupportedKey)
 	}
 }

@@ -71,6 +71,23 @@
         {"shape":"AuthorizationQuotaExceededFault"}
       ]
     },
+    "CopyDBClusterParameterGroup":{
+      "name":"CopyDBClusterParameterGroup",
+      "http":{
+        "method":"POST",
+        "requestUri":"/"
+      },
+      "input":{"shape":"CopyDBClusterParameterGroupMessage"},
+      "output":{
+        "shape":"CopyDBClusterParameterGroupResult",
+        "resultWrapper":"CopyDBClusterParameterGroupResult"
+      },
+      "errors":[
+        {"shape":"DBParameterGroupNotFoundFault"},
+        {"shape":"DBParameterGroupQuotaExceededFault"},
+        {"shape":"DBParameterGroupAlreadyExistsFault"}
+      ]
+    },
     "CopyDBClusterSnapshot":{
       "name":"CopyDBClusterSnapshot",
       "http":{
@@ -577,6 +594,21 @@
         {"shape":"DBParameterGroupNotFoundFault"}
       ]
     },
+    "DescribeDBClusterSnapshotAttributes":{
+      "name":"DescribeDBClusterSnapshotAttributes",
+      "http":{
+        "method":"POST",
+        "requestUri":"/"
+      },
+      "input":{"shape":"DescribeDBClusterSnapshotAttributesMessage"},
+      "output":{
+        "shape":"DescribeDBClusterSnapshotAttributesResult",
+        "resultWrapper":"DescribeDBClusterSnapshotAttributesResult"
+      },
+      "errors":[
+        {"shape":"DBClusterSnapshotNotFoundFault"}
+      ]
+    },
     "DescribeDBClusterSnapshots":{
       "name":"DescribeDBClusterSnapshots",
       "http":{
@@ -915,7 +947,8 @@
       },
       "errors":[
         {"shape":"DBClusterNotFoundFault"},
-        {"shape":"InvalidDBClusterStateFault"}
+        {"shape":"InvalidDBClusterStateFault"},
+        {"shape":"InvalidDBInstanceStateFault"}
       ]
     },
     "ListTagsForResource":{
@@ -973,6 +1006,23 @@
       "errors":[
         {"shape":"DBParameterGroupNotFoundFault"},
         {"shape":"InvalidDBParameterGroupStateFault"}
+      ]
+    },
+    "ModifyDBClusterSnapshotAttribute":{
+      "name":"ModifyDBClusterSnapshotAttribute",
+      "http":{
+        "method":"POST",
+        "requestUri":"/"
+      },
+      "input":{"shape":"ModifyDBClusterSnapshotAttributeMessage"},
+      "output":{
+        "shape":"ModifyDBClusterSnapshotAttributeResult",
+        "resultWrapper":"ModifyDBClusterSnapshotAttributeResult"
+      },
+      "errors":[
+        {"shape":"DBClusterSnapshotNotFoundFault"},
+        {"shape":"InvalidDBClusterSnapshotStateFault"},
+        {"shape":"SharedSnapshotQuotaExceededFault"}
       ]
     },
     "ModifyDBInstance":{
@@ -1109,6 +1159,22 @@
         {"shape":"DBInstanceNotFoundFault"}
       ]
     },
+    "PromoteReadReplicaDBCluster":{
+      "name":"PromoteReadReplicaDBCluster",
+      "http":{
+        "method":"POST",
+        "requestUri":"/"
+      },
+      "input":{"shape":"PromoteReadReplicaDBClusterMessage"},
+      "output":{
+        "shape":"PromoteReadReplicaDBClusterResult",
+        "resultWrapper":"PromoteReadReplicaDBClusterResult"
+      },
+      "errors":[
+        {"shape":"DBClusterNotFoundFault"},
+        {"shape":"InvalidDBClusterStateFault"}
+      ]
+    },
     "PurchaseReservedDBInstancesOffering":{
       "name":"PurchaseReservedDBInstancesOffering",
       "http":{
@@ -1200,6 +1266,32 @@
       "errors":[
         {"shape":"InvalidDBParameterGroupStateFault"},
         {"shape":"DBParameterGroupNotFoundFault"}
+      ]
+    },
+    "RestoreDBClusterFromS3":{
+      "name":"RestoreDBClusterFromS3",
+      "http":{
+        "method":"POST",
+        "requestUri":"/"
+      },
+      "input":{"shape":"RestoreDBClusterFromS3Message"},
+      "output":{
+        "shape":"RestoreDBClusterFromS3Result",
+        "resultWrapper":"RestoreDBClusterFromS3Result"
+      },
+      "errors":[
+        {"shape":"DBClusterAlreadyExistsFault"},
+        {"shape":"DBClusterQuotaExceededFault"},
+        {"shape":"StorageQuotaExceededFault"},
+        {"shape":"DBSubnetGroupNotFoundFault"},
+        {"shape":"InvalidVPCNetworkStateFault"},
+        {"shape":"InvalidDBClusterStateFault"},
+        {"shape":"InvalidDBSubnetGroupStateFault"},
+        {"shape":"InvalidSubnet"},
+        {"shape":"InvalidS3BucketFault"},
+        {"shape":"DBClusterParameterGroupNotFoundFault"},
+        {"shape":"KMSKeyNotAccessibleFault"},
+        {"shape":"DBClusterNotFoundFault"}
       ]
     },
     "RestoreDBClusterFromSnapshot":{
@@ -1546,6 +1638,26 @@
         "CharacterSetDescription":{"shape":"String"}
       }
     },
+    "CopyDBClusterParameterGroupMessage":{
+      "type":"structure",
+      "required":[
+        "SourceDBClusterParameterGroupIdentifier",
+        "TargetDBClusterParameterGroupIdentifier",
+        "TargetDBClusterParameterGroupDescription"
+      ],
+      "members":{
+        "SourceDBClusterParameterGroupIdentifier":{"shape":"String"},
+        "TargetDBClusterParameterGroupIdentifier":{"shape":"String"},
+        "TargetDBClusterParameterGroupDescription":{"shape":"String"},
+        "Tags":{"shape":"TagList"}
+      }
+    },
+    "CopyDBClusterParameterGroupResult":{
+      "type":"structure",
+      "members":{
+        "DBClusterParameterGroup":{"shape":"DBClusterParameterGroup"}
+      }
+    },
     "CopyDBClusterSnapshotMessage":{
       "type":"structure",
       "required":[
@@ -1628,9 +1740,7 @@
       "type":"structure",
       "required":[
         "DBClusterIdentifier",
-        "Engine",
-        "MasterUsername",
-        "MasterUserPassword"
+        "Engine"
       ],
       "members":{
         "AvailabilityZones":{"shape":"AvailabilityZones"},
@@ -1649,6 +1759,7 @@
         "OptionGroupName":{"shape":"String"},
         "PreferredBackupWindow":{"shape":"String"},
         "PreferredMaintenanceWindow":{"shape":"String"},
+        "ReplicationSourceIdentifier":{"shape":"String"},
         "Tags":{"shape":"TagList"},
         "StorageEncrypted":{"shape":"BooleanOptional"},
         "KmsKeyId":{"shape":"String"}
@@ -1924,6 +2035,8 @@
         "DBClusterOptionGroupMemberships":{"shape":"DBClusterOptionGroupMemberships"},
         "PreferredBackupWindow":{"shape":"String"},
         "PreferredMaintenanceWindow":{"shape":"String"},
+        "ReplicationSourceIdentifier":{"shape":"String"},
+        "ReadReplicaIdentifiers":{"shape":"ReadReplicaIdentifierList"},
         "DBClusterMembers":{"shape":"DBClusterMemberList"},
         "VpcSecurityGroups":{"shape":"VpcSecurityGroupMembershipList"},
         "HostedZoneId":{"shape":"String"},
@@ -2091,6 +2204,28 @@
         "senderFault":true
       },
       "exception":true
+    },
+    "DBClusterSnapshotAttribute":{
+      "type":"structure",
+      "members":{
+        "AttributeName":{"shape":"String"},
+        "AttributeValues":{"shape":"AttributeValueList"}
+      }
+    },
+    "DBClusterSnapshotAttributeList":{
+      "type":"list",
+      "member":{
+        "shape":"DBClusterSnapshotAttribute",
+        "locationName":"DBClusterSnapshotAttribute"
+      }
+    },
+    "DBClusterSnapshotAttributesResult":{
+      "type":"structure",
+      "members":{
+        "DBClusterSnapshotIdentifier":{"shape":"String"},
+        "DBClusterSnapshotAttributes":{"shape":"DBClusterSnapshotAttributeList"}
+      },
+      "wrapper":true
     },
     "DBClusterSnapshotList":{
       "type":"list",
@@ -2760,6 +2895,19 @@
         "Marker":{"shape":"String"}
       }
     },
+    "DescribeDBClusterSnapshotAttributesMessage":{
+      "type":"structure",
+      "required":["DBClusterSnapshotIdentifier"],
+      "members":{
+        "DBClusterSnapshotIdentifier":{"shape":"String"}
+      }
+    },
+    "DescribeDBClusterSnapshotAttributesResult":{
+      "type":"structure",
+      "members":{
+        "DBClusterSnapshotAttributesResult":{"shape":"DBClusterSnapshotAttributesResult"}
+      }
+    },
     "DescribeDBClusterSnapshotsMessage":{
       "type":"structure",
       "members":{
@@ -2768,7 +2916,9 @@
         "SnapshotType":{"shape":"String"},
         "Filters":{"shape":"FilterList"},
         "MaxRecords":{"shape":"IntegerOptional"},
-        "Marker":{"shape":"String"}
+        "Marker":{"shape":"String"},
+        "IncludeShared":{"shape":"Boolean"},
+        "IncludePublic":{"shape":"Boolean"}
       }
     },
     "DescribeDBClustersMessage":{
@@ -2868,6 +3018,7 @@
     },
     "DescribeDBSnapshotAttributesMessage":{
       "type":"structure",
+      "required":["DBSnapshotIdentifier"],
       "members":{
         "DBSnapshotIdentifier":{"shape":"String"}
       }
@@ -3213,7 +3364,8 @@
     "FailoverDBClusterMessage":{
       "type":"structure",
       "members":{
-        "DBClusterIdentifier":{"shape":"String"}
+        "DBClusterIdentifier":{"shape":"String"},
+        "TargetDBInstanceIdentifier":{"shape":"String"}
       }
     },
     "FailoverDBClusterResult":{
@@ -3439,6 +3591,17 @@
       },
       "exception":true
     },
+    "InvalidS3BucketFault":{
+      "type":"structure",
+      "members":{
+      },
+      "error":{
+        "code":"InvalidS3BucketFault",
+        "httpStatusCode":400,
+        "senderFault":true
+      },
+      "exception":true
+    },
     "InvalidSubnet":{
       "type":"structure",
       "members":{
@@ -3519,6 +3682,25 @@
         "DBCluster":{"shape":"DBCluster"}
       }
     },
+    "ModifyDBClusterSnapshotAttributeMessage":{
+      "type":"structure",
+      "required":[
+        "DBClusterSnapshotIdentifier",
+        "AttributeName"
+      ],
+      "members":{
+        "DBClusterSnapshotIdentifier":{"shape":"String"},
+        "AttributeName":{"shape":"String"},
+        "ValuesToAdd":{"shape":"AttributeValueList"},
+        "ValuesToRemove":{"shape":"AttributeValueList"}
+      }
+    },
+    "ModifyDBClusterSnapshotAttributeResult":{
+      "type":"structure",
+      "members":{
+        "DBClusterSnapshotAttributesResult":{"shape":"DBClusterSnapshotAttributesResult"}
+      }
+    },
     "ModifyDBInstanceMessage":{
       "type":"structure",
       "required":["DBInstanceIdentifier"],
@@ -3526,6 +3708,7 @@
         "DBInstanceIdentifier":{"shape":"String"},
         "AllocatedStorage":{"shape":"IntegerOptional"},
         "DBInstanceClass":{"shape":"String"},
+        "DBSubnetGroupName":{"shape":"String"},
         "DBSecurityGroups":{"shape":"DBSecurityGroupNameList"},
         "VpcSecurityGroupIds":{"shape":"VpcSecurityGroupIdList"},
         "ApplyImmediately":{"shape":"Boolean"},
@@ -3538,6 +3721,7 @@
         "EngineVersion":{"shape":"String"},
         "AllowMajorVersionUpgrade":{"shape":"Boolean"},
         "AutoMinorVersionUpgrade":{"shape":"BooleanOptional"},
+        "LicenseModel":{"shape":"String"},
         "Iops":{"shape":"IntegerOptional"},
         "OptionGroupName":{"shape":"String"},
         "NewDBInstanceIdentifier":{"shape":"String"},
@@ -3574,7 +3758,10 @@
     },
     "ModifyDBSnapshotAttributeMessage":{
       "type":"structure",
-      "required":["DBSnapshotIdentifier"],
+      "required":[
+        "DBSnapshotIdentifier",
+        "AttributeName"
+      ],
       "members":{
         "DBSnapshotIdentifier":{"shape":"String"},
         "AttributeName":{"shape":"String"},
@@ -3647,6 +3834,7 @@
         "Persistent":{"shape":"Boolean"},
         "Permanent":{"shape":"Boolean"},
         "Port":{"shape":"IntegerOptional"},
+        "OptionVersion":{"shape":"String"},
         "OptionSettings":{"shape":"OptionSettingConfigurationList"},
         "DBSecurityGroupMemberships":{"shape":"DBSecurityGroupMembershipList"},
         "VpcSecurityGroupMemberships":{"shape":"VpcSecurityGroupMembershipList"}
@@ -3658,6 +3846,7 @@
       "members":{
         "OptionName":{"shape":"String"},
         "Port":{"shape":"IntegerOptional"},
+        "OptionVersion":{"shape":"String"},
         "DBSecurityGroupMemberships":{"shape":"DBSecurityGroupNameList"},
         "VpcSecurityGroupMemberships":{"shape":"VpcSecurityGroupIdList"},
         "OptionSettings":{"shape":"OptionSettingsList"}
@@ -3732,7 +3921,8 @@
         "OptionsDependedOn":{"shape":"OptionsDependedOn"},
         "Persistent":{"shape":"Boolean"},
         "Permanent":{"shape":"Boolean"},
-        "OptionGroupOptionSettings":{"shape":"OptionGroupOptionSettingsList"}
+        "OptionGroupOptionSettings":{"shape":"OptionGroupOptionSettingsList"},
+        "OptionGroupOptionVersions":{"shape":"OptionGroupOptionVersionsList"}
       }
     },
     "OptionGroupOptionSetting":{
@@ -3751,6 +3941,13 @@
       "member":{
         "shape":"OptionGroupOptionSetting",
         "locationName":"OptionGroupOptionSetting"
+      }
+    },
+    "OptionGroupOptionVersionsList":{
+      "type":"list",
+      "member":{
+        "shape":"OptionVersion",
+        "locationName":"OptionVersion"
       }
     },
     "OptionGroupOptionsList":{
@@ -3822,6 +4019,13 @@
       "member":{
         "shape":"OptionSetting",
         "locationName":"OptionSetting"
+      }
+    },
+    "OptionVersion":{
+      "type":"structure",
+      "members":{
+        "Version":{"shape":"String"},
+        "IsDefault":{"shape":"Boolean"}
       }
     },
     "OptionsDependedOn":{
@@ -3934,10 +4138,12 @@
         "BackupRetentionPeriod":{"shape":"IntegerOptional"},
         "MultiAZ":{"shape":"BooleanOptional"},
         "EngineVersion":{"shape":"String"},
+        "LicenseModel":{"shape":"String"},
         "Iops":{"shape":"IntegerOptional"},
         "DBInstanceIdentifier":{"shape":"String"},
         "StorageType":{"shape":"String"},
-        "CACertificateIdentifier":{"shape":"String"}
+        "CACertificateIdentifier":{"shape":"String"},
+        "DBSubnetGroupName":{"shape":"String"}
       }
     },
     "PointInTimeRestoreNotEnabledFault":{
@@ -3950,6 +4156,19 @@
         "senderFault":true
       },
       "exception":true
+    },
+    "PromoteReadReplicaDBClusterMessage":{
+      "type":"structure",
+      "required":["DBClusterIdentifier"],
+      "members":{
+        "DBClusterIdentifier":{"shape":"String"}
+      }
+    },
+    "PromoteReadReplicaDBClusterResult":{
+      "type":"structure",
+      "members":{
+        "DBCluster":{"shape":"DBCluster"}
+      }
     },
     "PromoteReadReplicaMessage":{
       "type":"structure",
@@ -3998,6 +4217,13 @@
       "member":{
         "shape":"String",
         "locationName":"ReadReplicaDBInstanceIdentifier"
+      }
+    },
+    "ReadReplicaIdentifierList":{
+      "type":"list",
+      "member":{
+        "shape":"String",
+        "locationName":"ReadReplicaIdentifier"
       }
     },
     "RebootDBInstanceMessage":{
@@ -4201,6 +4427,51 @@
         "PendingMaintenanceActionDetails":{"shape":"PendingMaintenanceActionDetails"}
       },
       "wrapper":true
+    },
+    "RestoreDBClusterFromS3Message":{
+      "type":"structure",
+      "required":[
+        "DBClusterIdentifier",
+        "Engine",
+        "MasterUsername",
+        "MasterUserPassword",
+        "SourceEngine",
+        "SourceEngineVersion",
+        "S3BucketName",
+        "S3IngestionRoleArn"
+      ],
+      "members":{
+        "AvailabilityZones":{"shape":"AvailabilityZones"},
+        "BackupRetentionPeriod":{"shape":"IntegerOptional"},
+        "CharacterSetName":{"shape":"String"},
+        "DatabaseName":{"shape":"String"},
+        "DBClusterIdentifier":{"shape":"String"},
+        "DBClusterParameterGroupName":{"shape":"String"},
+        "VpcSecurityGroupIds":{"shape":"VpcSecurityGroupIdList"},
+        "DBSubnetGroupName":{"shape":"String"},
+        "Engine":{"shape":"String"},
+        "EngineVersion":{"shape":"String"},
+        "Port":{"shape":"IntegerOptional"},
+        "MasterUsername":{"shape":"String"},
+        "MasterUserPassword":{"shape":"String"},
+        "OptionGroupName":{"shape":"String"},
+        "PreferredBackupWindow":{"shape":"String"},
+        "PreferredMaintenanceWindow":{"shape":"String"},
+        "Tags":{"shape":"TagList"},
+        "StorageEncrypted":{"shape":"BooleanOptional"},
+        "KmsKeyId":{"shape":"String"},
+        "SourceEngine":{"shape":"String"},
+        "SourceEngineVersion":{"shape":"String"},
+        "S3BucketName":{"shape":"String"},
+        "S3Prefix":{"shape":"String"},
+        "S3IngestionRoleArn":{"shape":"String"}
+      }
+    },
+    "RestoreDBClusterFromS3Result":{
+      "type":"structure",
+      "members":{
+        "DBCluster":{"shape":"DBCluster"}
+      }
     },
     "RestoreDBClusterFromSnapshotMessage":{
       "type":"structure",

@@ -2,49 +2,95 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package acme provides an ACME client implementation.
-// See https://ietf-wg-acme.github.io/acme/ for details.
+// Package acme provides an implementation of the
+// Automatic Certificate Management Environment (ACME) spec.
+// See https://tools.ietf.org/html/draft-ietf-acme-acme-02 for details.
 //
 // This package is a work in progress and makes no API stability promises.
 package acme
 
 import (
 	"bytes"
+	"crypto"
+	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
 )
 
+// LetsEncryptURL is the Directory endpoint of Let's Encrypt CA.
+const LetsEncryptURL = "https://acme-v01.api.letsencrypt.org/directory"
+
 // Client is an ACME client.
+// The only required field is Key. An example of creating a client with a new key
+// is as follows:
+//
+// 	key, err := rsa.GenerateKey(rand.Reader, 2048)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	client := &Client{Key: key}
+//
 type Client struct {
 	// HTTPClient optionally specifies an HTTP client to use
 	// instead of http.DefaultClient.
 	HTTPClient *http.Client
 
-	// Key is the account key used to register with a CA
-	// and sign requests.
-	Key *rsa.PrivateKey
+	// Key is the account key used to register with a CA and sign requests.
+	// Key.Public() must return a *rsa.PublicKey or *ecdsa.PublicKey.
+	Key crypto.Signer
+
+	// DirectoryURL points to the CA directory endpoint.
+	// If empty, LetsEncryptURL is used.
+	// Mutating this value after a successful call of Client's Discover method
+	// will have no effect.
+	DirectoryURL string
+
+	dirMu sync.Mutex // guards writes to dir
+	dir   *Directory // cached result of Client's Discover method
 }
 
-// Discover performs ACME server discovery using the provided discovery endpoint URL.
-func (c *Client) Discover(url string) (*Directory, error) {
-	res, err := c.httpClient().Get(url)
+// Discover performs ACME server discovery using c.DirectoryURL.
+//
+// It caches successful result. So, subsequent calls will not result in
+// a network round-trip. This also means mutating c.DirectoryURL after successful call
+// of this method will have no effect.
+func (c *Client) Discover() (Directory, error) {
+	c.dirMu.Lock()
+	defer c.dirMu.Unlock()
+	if c.dir != nil {
+		return *c.dir, nil
+	}
+
+	dirURL := c.DirectoryURL
+	if dirURL == "" {
+		dirURL = LetsEncryptURL
+	}
+	res, err := c.httpClient().Get(dirURL)
 	if err != nil {
-		return nil, err
+		return Directory{}, err
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return nil, responseError(res)
+		return Directory{}, responseError(res)
 	}
+
 	var v struct {
 		Reg    string `json:"new-reg"`
 		Authz  string `json:"new-authz"`
@@ -57,9 +103,9 @@ func (c *Client) Discover(url string) (*Directory, error) {
 		}
 	}
 	if json.NewDecoder(res.Body).Decode(&v); err != nil {
-		return nil, err
+		return Directory{}, err
 	}
-	return &Directory{
+	c.dir = &Directory{
 		RegURL:    v.Reg,
 		AuthzURL:  v.Authz,
 		CertURL:   v.Cert,
@@ -67,7 +113,8 @@ func (c *Client) Discover(url string) (*Directory, error) {
 		Terms:     v.Meta.Terms,
 		Website:   v.Meta.Website,
 		CAA:       v.Meta.CAA,
-	}, nil
+	}
+	return *c.dir, nil
 }
 
 // CreateCert requests a new certificate.
@@ -76,9 +123,12 @@ func (c *Client) Discover(url string) (*Directory, error) {
 // In such scenario the caller can cancel the polling with ctx.
 //
 // If the bundle is true, the returned value will also contain CA (the issuer) certificate.
-// The url argument is an Directory.CertURL value, typically obtained from c.Discover.
 // The csr is a DER encoded certificate signing request.
-func (c *Client) CreateCert(ctx context.Context, url string, csr []byte, exp time.Duration, bundle bool) (der [][]byte, certURL string, err error) {
+func (c *Client) CreateCert(ctx context.Context, csr []byte, exp time.Duration, bundle bool) (der [][]byte, certURL string, err error) {
+	if _, err := c.Discover(); err != nil {
+		return nil, "", err
+	}
+
 	req := struct {
 		Resource  string `json:"resource"`
 		CSR       string `json:"csr"`
@@ -94,7 +144,7 @@ func (c *Client) CreateCert(ctx context.Context, url string, csr []byte, exp tim
 		req.NotAfter = now.Add(exp).Format(time.RFC3339)
 	}
 
-	res, err := c.postJWS(url, req)
+	res, err := c.postJWS(c.dir.CertURL, req)
 	if err != nil {
 		return nil, "", err
 	}
@@ -118,9 +168,7 @@ func (c *Client) CreateCert(ctx context.Context, url string, csr []byte, exp tim
 // It retries the request until the certificate is successfully retrieved,
 // context is cancelled by the caller or an error response is received.
 //
-// The returned value will also contain CA (the issuer) certificate if bundle == true.
-//
-// http.DefaultClient is used if client argument is nil.
+// The returned value will also contain CA (the issuer) certificate if bundle is true.
 func (c *Client) FetchCert(ctx context.Context, url string, bundle bool) ([][]byte, error) {
 	for {
 		res, err := c.httpClient().Get(url)
@@ -147,16 +195,39 @@ func (c *Client) FetchCert(ctx context.Context, url string, bundle bool) ([][]by
 	}
 }
 
+// AcceptTOS always returns true to indicate the acceptance of a CA Terms of Service
+// during account registration. See Register method of Client for more details.
+func AcceptTOS(string) bool { return true }
+
 // Register creates a new account registration by following the "new-reg" flow.
 // It returns registered account. The a argument is not modified.
 //
-// The url argument is typically an Directory.RegURL obtained from c.Discover.
-func (c *Client) Register(url string, a *Account) (*Account, error) {
-	return c.doReg(url, "new-reg", a)
+// The registration may require the caller to agree to the CA Terms of Service (TOS).
+// If so, and the account has not indicated the acceptance of the terms (see Account for details),
+// Register calls prompt with a TOS URL provided by the CA. Prompt should report
+// whether the caller agrees to the terms. To always accept the terms, the caller can use AcceptTOS.
+func (c *Client) Register(a *Account, prompt func(tos string) bool) (*Account, error) {
+	if _, err := c.Discover(); err != nil {
+		return nil, err
+	}
+
+	var err error
+	if a, err = c.doReg(c.dir.RegURL, "new-reg", a); err != nil {
+		return nil, err
+	}
+	var accept bool
+	if a.CurrentTerms != "" && a.CurrentTerms != a.AgreedTerms {
+		accept = prompt(a.CurrentTerms)
+	}
+	if accept {
+		a.AgreedTerms = a.CurrentTerms
+		a, err = c.UpdateReg(a)
+	}
+	return a, err
 }
 
 // GetReg retrieves an existing registration.
-// The url argument is an Account.URI, typically obtained from c.Register.
+// The url argument is an Account URI.
 func (c *Client) GetReg(url string) (*Account, error) {
 	a := &Account{URI: url}
 	return c.doReg(url, "reg", a)
@@ -164,18 +235,18 @@ func (c *Client) GetReg(url string) (*Account, error) {
 
 // UpdateReg updates an existing registration.
 // It returns an updated account copy. The provided account is not modified.
-//
-// The url argument is an Account.URI, usually obtained with c.Register.
-func (c *Client) UpdateReg(url string, a *Account) (*Account, error) {
-	return c.doReg(url, "reg", a)
+func (c *Client) UpdateReg(a *Account) (*Account, error) {
+	return c.doReg(a.URI, "reg", a)
 }
 
 // Authorize performs the initial step in an authorization flow.
 // The caller will then need to choose from and perform a set of returned
 // challenges using c.Accept in order to successfully complete authorization.
-//
-// The url argument is an authz URL, usually obtained with c.Register.
-func (c *Client) Authorize(url, domain string) (*Authorization, error) {
+func (c *Client) Authorize(domain string) (*Authorization, error) {
+	if _, err := c.Discover(); err != nil {
+		return nil, err
+	}
+
 	type authzID struct {
 		Type  string `json:"type"`
 		Value string `json:"value"`
@@ -187,7 +258,7 @@ func (c *Client) Authorize(url, domain string) (*Authorization, error) {
 		Resource:   "new-authz",
 		Identifier: authzID{Type: "dns", Value: domain},
 	}
-	res, err := c.postJWS(url, req)
+	res, err := c.postJWS(c.dir.AuthzURL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -249,6 +320,11 @@ func (c *Client) GetChallenge(url string) (*Challenge, error) {
 //
 // The server will then perform the validation asynchronously.
 func (c *Client) Accept(chal *Challenge) (*Challenge, error) {
+	auth, err := keyAuth(c.Key.Public(), chal.Token)
+	if err != nil {
+		return nil, err
+	}
+
 	req := struct {
 		Resource string `json:"resource"`
 		Type     string `json:"type"`
@@ -256,7 +332,7 @@ func (c *Client) Accept(chal *Challenge) (*Challenge, error) {
 	}{
 		Resource: "challenge",
 		Type:     chal.Type,
-		Auth:     keyAuth(&c.Key.PublicKey, chal.Token),
+		Auth:     auth,
 	}
 	res, err := c.postJWS(chal.URI, req)
 	if err != nil {
@@ -285,8 +361,58 @@ func (c *Client) HTTP01Handler(token string) http.Handler {
 			return
 		}
 		w.Header().Set("content-type", "text/plain")
-		w.Write([]byte(keyAuth(&c.Key.PublicKey, token)))
+		auth, err := keyAuth(c.Key.Public(), token)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Write([]byte(auth))
 	})
+}
+
+// TLSSNI01ChallengeCert creates a certificate for TLS-SNI-01 challenge response.
+// Servers can present the certificate to validate the challenge and prove control
+// over a domain name.
+//
+// The implementation is incomplete in that the returned value is a single certificate,
+// computed only for Z0 of the key authorization. ACME CAs are expected to update
+// their implementations to use the newer version, TLS-SNI-02.
+// For more details on TLS-SNI-01 see https://tools.ietf.org/html/draft-ietf-acme-acme-01#section-7.3.
+//
+// The token argument is a Challenge.Token value.
+// The returned certificate is valid for the next 24 hours.
+func (c *Client) TLSSNI01ChallengeCert(token string) (tls.Certificate, error) {
+	ka, err := keyAuth(c.Key.Public(), token)
+	if err != nil {
+		return tls.Certificate{}, nil
+	}
+	b := sha256.Sum256([]byte(ka))
+	h := hex.EncodeToString(b[:])
+	name := fmt.Sprintf("%s.%s.acme.invalid", h[:32], h[32:])
+	return tlsChallengeCert(name)
+}
+
+// TLSSNI02ChallengeCert creates a certificate for TLS-SNI-02 challenge response.
+// Servers can present the certificate to validate the challenge and prove control
+// over a domain name. For more details on TLS-SNI-02 see
+// https://tools.ietf.org/html/draft-ietf-acme-acme-03#section-7.3.
+//
+// The token argument is a Challenge.Token value.
+// The returned certificate is valid for the next 24 hours.
+func (c *Client) TLSSNI02ChallengeCert(token string) (tls.Certificate, error) {
+	b := sha256.Sum256([]byte(token))
+	h := hex.EncodeToString(b[:])
+	sanA := fmt.Sprintf("%s.%s.token.acme.invalid", h[:32], h[32:])
+
+	ka, err := keyAuth(c.Key.Public(), token)
+	if err != nil {
+		return tls.Certificate{}, nil
+	}
+	b = sha256.Sum256([]byte(ka))
+	h = hex.EncodeToString(b[:])
+	sanB := fmt.Sprintf("%s.%s.ka.acme.invalid", h[:32], h[32:])
+
+	return tlsChallengeCert(sanA, sanB)
 }
 
 func (c *Client) httpClient() *http.Client {
@@ -465,8 +591,42 @@ func retryAfter(v string) (time.Duration, error) {
 }
 
 // keyAuth generates a key authorization string for a given token.
-func keyAuth(pub *rsa.PublicKey, token string) string {
-	return fmt.Sprintf("%s.%s", token, JWKThumbprint(pub))
+func keyAuth(pub crypto.PublicKey, token string) (string, error) {
+	th, err := JWKThumbprint(pub)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s.%s", token, th), nil
+}
+
+// tlsChallengeCert creates a temporary certificate for TLS-SNI challenges
+// with the given SANs.
+func tlsChallengeCert(san ...string) (tls.Certificate, error) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	t := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageKeyEncipherment,
+		DNSNames:              san,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, &t, &t, &key.PublicKey, key)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	cert := encodePEM("CERTIFICATE", der)
+	keyp := encodePEM("RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(key))
+	return tls.X509KeyPair(cert, keyp)
+}
+
+// encodePEM returns b encoded as PEM with block of type typ.
+func encodePEM(typ string, b []byte) []byte {
+	pb := &pem.Block{Type: typ, Bytes: b}
+	return pem.EncodeToMemory(pb)
 }
 
 // timeNow is useful for testing for fixed current time.

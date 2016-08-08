@@ -73,7 +73,10 @@
       "output":{
         "shape":"DeleteChangeSetOutput",
         "resultWrapper":"DeleteChangeSetResult"
-      }
+      },
+      "errors":[
+        {"shape":"InvalidChangeSetStatusException"}
+      ]
     },
     "DeleteStack":{
       "name":"DeleteStack",
@@ -344,7 +347,10 @@
     "CapabilitiesReason":{"type":"string"},
     "Capability":{
       "type":"string",
-      "enum":["CAPABILITY_IAM"]
+      "enum":[
+        "CAPABILITY_IAM",
+        "CAPABILITY_NAMED_IAM"
+      ]
     },
     "CausingEntity":{"type":"string"},
     "Change":{
@@ -412,6 +418,7 @@
         "StackName":{"shape":"StackName"},
         "ChangeSetId":{"shape":"ChangeSetId"},
         "ChangeSetName":{"shape":"ChangeSetName"},
+        "ExecutionStatus":{"shape":"ExecutionStatus"},
         "Status":{"shape":"ChangeSetStatus"},
         "StatusReason":{"shape":"ChangeSetStatusReason"},
         "CreationTime":{"shape":"CreationTime"},
@@ -560,6 +567,7 @@
         "Description":{"shape":"Description"},
         "Parameters":{"shape":"Parameters"},
         "CreationTime":{"shape":"CreationTime"},
+        "ExecutionStatus":{"shape":"ExecutionStatus"},
         "Status":{"shape":"ChangeSetStatus"},
         "StatusReason":{"shape":"ChangeSetStatusReason"},
         "NotificationARNs":{"shape":"NotificationARNs"},
@@ -668,6 +676,17 @@
       "type":"structure",
       "members":{
       }
+    },
+    "ExecutionStatus":{
+      "type":"string",
+      "enum":[
+        "UNAVAILABLE",
+        "AVAILABLE",
+        "EXECUTE_IN_PROGRESS",
+        "EXECUTE_COMPLETE",
+        "EXECUTE_FAILED",
+        "OBSOLETE"
+      ]
     },
     "GetStackPolicyInput":{
       "type":"structure",
