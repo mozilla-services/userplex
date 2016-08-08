@@ -41,11 +41,9 @@ type run struct {
 }
 
 type parameters struct {
-	IamGroups      []string
-	NotifyNewUsers bool
-	SmtpRelay      string
-	SmtpFrom       string
-	AccountName    string
+	IamGroups       []string
+	AccountName     string
+	CreateAccessKey bool
 }
 
 type credentials struct {
@@ -177,8 +175,10 @@ func (r *run) initIamClient() *iam.IAM {
 // user to the necessary groups, and send it an email
 func (r *run) createIamUser(uid string) {
 	var (
-		cuo  *iam.CreateUserOutput
-		clpo *iam.CreateLoginProfileOutput
+		accesskey string
+		cuo       *iam.CreateUserOutput
+		clpo      *iam.CreateLoginProfileOutput
+		cako      *iam.CreateAccessKeyOutput
 	)
 	password := "P" + randToken() + "%"
 	mail, err := r.Conf.LdapCli.GetUserEmailByUid(uid)
@@ -213,21 +213,44 @@ func (r *run) createIamUser(uid string) {
 	for _, group := range r.p.IamGroups {
 		r.addUserToIamGroup(uid, group)
 	}
+	if r.p.CreateAccessKey {
+		cako, err = r.cli.CreateAccessKey(&iam.CreateAccessKeyInput{
+			UserName: aws.String(uid),
+		})
+		if err != nil || cako == nil {
+			log.Printf("[error] aws %q: failed to access key for user %q: %v",
+				r.p.AccountName, uid, err)
+			return
+		}
+		accesskey = fmt.Sprintf(`
+Add the lines below to ~/.aws/credentials
+[%s]
+aws_access_key_id = %s
+aws_secret_access_key = %s`,
+			r.p.AccountName,
+			*cako.AccessKey.AccessKeyId,
+			*cako.AccessKey.SecretAccessKey)
+	}
+
 notify:
 	// notify user
 	rcpt := r.Conf.Notify.Recipient
 	if rcpt == "{ldap:mail}" {
 		rcpt = mail
 	}
+
+	body := fmt.Sprintf(`New AWS account:
+login: %s
+pass:  %s (change at first login)
+url:   https://%s.signin.aws.amazon.com/console
+%s`, uid, password, r.p.AccountName, accesskey)
+
 	r.Conf.Notify.Channel <- modules.Notification{
 		Module:      "aws",
 		Recipient:   rcpt,
 		Mode:        r.Conf.Notify.Mode,
 		MustEncrypt: true,
-		Body: []byte(fmt.Sprintf(`New AWS account:
-login: %s
-pass:  %s (change at first login)
-url:   %s`, uid, password, fmt.Sprintf("https://%s.signin.aws.amazon.com/console", r.p.AccountName))),
+		Body:        []byte(body),
 	}
 	return
 }

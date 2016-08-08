@@ -32,6 +32,7 @@ modules:
         - sysadmins
       create: true
       delete: true
+      parameters:
           iamgroups:
             - ldapmanaged
 ```
@@ -40,10 +41,28 @@ and add them into the `ldapmanaged` aws iam group. This allows `userplex`
 to later remove users from the `ldapmanaged` group that have been removed
 from ldap, and delete their aws account.
 
+Access key creation
+-------------------
+This module can create an access key when a user is created. The access key will
+be sent to the user in the body of the encrypted notification. To activate this
+feature, set `createaccesskey: true` in the configuration parameters.
+
+```yaml
+modules:
+    - name: aws
+      parameters:
+          createaccesskey: true
+```
+
 Notifications
 -------------
-The module supports `smtp` notifications which can be sent to an arbitrary
-address, or the user's LDAP email address.
+This module supports standard userplex notifications. When notifications are
+enabled, users are required to have a pgp fingerprint in LDAP because the
+notification body contains credentials that must be encrypted.
+
+The name of the AWS account is also needed to point users to the location of the
+AWS console.
+
 ```yaml
 modules:
     - name: aws
@@ -51,7 +70,7 @@ modules:
         mode: smtp
         recipient: "{ldap:mail}"
       parameters:
-          signinurl: "https://cloudservices-aws-dev.signin.aws.amazon.com/console"
+          accountname: cloudservices-aws-dev
 
 ```
 Notifications are only sent on creation of user accounts. No notification is
