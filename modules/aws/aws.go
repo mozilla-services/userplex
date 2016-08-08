@@ -99,7 +99,7 @@ func (r *run) Run() (err error) {
 		iamers := r.getIamers()
 		for uid, _ := range iamers {
 			if _, ok := ldapers[uid]; !ok {
-				log.Printf("[info] aws %q: %q found in IAM group but not in LDAP, needs deletion",
+				r.debug("aws %q: %q found in IAM group but not in LDAP, needs deletion",
 					r.p.AccountName, uid)
 				r.removeIamUser(uid)
 				countDeleted++
@@ -121,7 +121,7 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 		shortdn := strings.Split(user, ",")[0]
 		uid, err := r.Conf.LdapCli.GetUserId(shortdn)
 		if err != nil {
-			log.Printf("[warning] aws %q: ldap query failed with error %v", r.p.AccountName, err)
+			log.Printf("[error] aws %q: ldap query failed with error %v", r.p.AccountName, err)
 			continue
 		}
 		// apply the uid map: only store the translated uid in the ldapuid
@@ -136,7 +136,7 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 			// if no pubkey is found, log an error and set the user's entry to False
 			_, err = r.Conf.LdapCli.GetUserPGPKey(shortdn)
 			if err != nil {
-				log.Printf("[warning] aws %q: no pgp public key could be found for %s: %v",
+				r.debug("aws %q: no pgp public key could be found for %s: %v",
 					r.p.AccountName, shortdn, err)
 				lgm[uid] = false
 			}
@@ -237,7 +237,7 @@ func (r *run) updateUserGroups(uid string) (updated bool) {
 		UserName: aws.String(uid),
 	})
 	if err != nil || gresp == nil {
-		log.Printf("[info] aws %q: groups of user %q not found, needs to be added",
+		r.debug("aws %q: groups of user %q not found, needs to be added",
 			r.p.AccountName, uid)
 	}
 	// iterate through the groups and find the missing ones
@@ -262,7 +262,7 @@ func (r *run) addUserToIamGroup(uid, group string) {
 		return
 	}
 	if !r.Conf.ApplyChanges {
-		log.Printf("[dryrun] aws %q: would have added AWS IAM user %q to group %q",
+		r.debug("aws %q: would have added AWS IAM user %q to group %q",
 			r.p.AccountName, uid, group)
 		return
 	}
@@ -299,7 +299,7 @@ func (r *run) removeIamUser(uid string) {
 	for _, accesskey := range lakfu.AccessKeyMetadata {
 		keyid := strings.Replace(awsutil.Prettify(accesskey.AccessKeyId), `"`, ``, -1)
 		if !r.Conf.ApplyChanges {
-			log.Printf("[dryrun] aws %q: would have removed access key id %q of user %q",
+			r.debug("[dryrun] aws %q: would have removed access key id %q of user %q",
 				r.p.AccountName, keyid, uid)
 			continue
 		}
@@ -312,7 +312,7 @@ func (r *run) removeIamUser(uid string) {
 			log.Printf("[error] aws %q: failed to delete access key %q of user %q: %v. request was %q.",
 				r.p.AccountName, keyid, uid, err, daki.String())
 		} else {
-			log.Printf("[info] aws %q: deleted access key %q of user %q",
+			r.debug("aws %q: deleted access key %q of user %q",
 				r.p.AccountName, keyid, uid)
 		}
 
@@ -330,7 +330,7 @@ func (r *run) removeIamUser(uid string) {
 	for _, iamgroup := range lgfu.Groups {
 		gname := strings.Replace(awsutil.Prettify(iamgroup.GroupName), `"`, ``, -1)
 		if !r.Conf.ApplyChanges {
-			log.Printf("[dryrun] aws %q: would have removed user %q from group %q",
+			r.debug("[dryrun] aws %q: would have removed user %q from group %q",
 				r.p.AccountName, uid, gname)
 			continue
 		}
@@ -343,7 +343,7 @@ func (r *run) removeIamUser(uid string) {
 			log.Printf("[error] aws %q: failed to remove user %q from group %q: %v. request was %q.",
 				r.p.AccountName, uid, gname, err, rufgi.String())
 		} else {
-			log.Printf("[info] aws %q: removed user %q from group %q",
+			r.debug("aws %q: removed user %q from group %q",
 				r.p.AccountName, uid, gname)
 		}
 	}
@@ -356,7 +356,7 @@ func (r *run) removeIamUser(uid string) {
 		UserName: aws.String(uid),
 	})
 	if err != nil || dlpo == nil {
-		log.Printf("[info] aws %q: user %q did not have an aws login profile to delete",
+		r.debug("aws %q: user %q did not have an aws login profile to delete",
 			r.p.AccountName, uid)
 	}
 	duo, err = r.cli.DeleteUser(&iam.DeleteUserInput{
@@ -395,4 +395,10 @@ func randToken() string {
 	b := make([]byte, 8)
 	rand.Read(b)
 	return fmt.Sprintf("%x", b)
+}
+
+func (r *run) debug(format string, a ...interface{}) {
+	if r.Conf.Debug {
+		log.Printf("[debug] "+format, a...)
+	}
 }

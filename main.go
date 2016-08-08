@@ -58,9 +58,10 @@ type conf struct {
 var config = flag.String("c", "", "Load configuration from file. Use stdin if omitted.")
 var applyChanges = flag.Bool("applyChanges", false, "By default, Userplex runs in dry mode. Set this flag to apply changes.")
 var notifyUsers = flag.Bool("notifyUsers", false, "If set, Userplex will send email notifications to users when changes are applied.")
-var once = flag.Bool("once", false, "Run only once and exit, don't under the cron loop")
+var once = flag.Bool("once", false, "Run only once and exit, don't enter the cron loop")
 var runmod = flag.String("module", "all", "Module to run. if 'all', run all available modules (default)")
 var showVersion = flag.Bool("V", false, "Show version and exit")
+var debug = flag.Bool("D", false, "Enable debug logging")
 
 func main() {
 	var (
@@ -162,13 +163,15 @@ func run(conf conf) {
 	notifdone := make(chan bool)
 	go processNotifications(conf, notifchan, notifdone)
 
-	// store the value of applyChanges and the ldap client
-	// in the configuration of each module
+	// store configuration parameters for each module, including
+	// the values of notifyUsers, applyChanges, debug, the ldap
+	// client and the notification channel
 	for i := range conf.Modules {
 		conf.Modules[i].ApplyChanges = *applyChanges
 		conf.Modules[i].NotifyUsers = *notifyUsers
 		conf.Modules[i].LdapCli = cli
 		conf.Modules[i].Notify.Channel = notifchan
+		conf.Modules[i].Debug = *debug
 	}
 
 	// run each module in the order it appears in the configuration

@@ -24,6 +24,7 @@ type Configuration struct {
 	ApplyChanges bool           `yaml:"applychanges" json:"applychanges"`
 	NotifyUsers  bool           `yaml:"notifyusers" json:"notifyusers"`
 	LdapCli      mozldap.Client `yaml:"-" json:"-"`
+	Debug        bool           `yaml:"-" json:"-"`
 }
 
 type NotifyConf struct {
