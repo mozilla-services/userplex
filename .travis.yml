@@ -3,7 +3,6 @@ language: go
 go:
   - "1.5"
   - "1.6"
-  - "1.7"
 go_import_path: go.mozilla.org/userplex
 services:
   - docker
