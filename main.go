@@ -22,6 +22,7 @@ import (
 	_ "go.mozilla.org/userplex/modules/authorizedkeys"
 	_ "go.mozilla.org/userplex/modules/aws"
 	_ "go.mozilla.org/userplex/modules/datadog"
+	_ "go.mozilla.org/userplex/modules/github"
 
 	"github.com/gorhill/cronexpr"
 	"go.mozilla.org/mozldap"
