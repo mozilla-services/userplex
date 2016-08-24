@@ -82,6 +82,7 @@ modules:
         - thedevelopers
       create: true
       delete: true
+      reset: true
       uidmap: *CUSTOMMAP1
       credentials:
           accesskey: AKIAbbbb
@@ -120,7 +121,7 @@ and `neo`, and then create the authorizedkeys files with the translated uids.
 ### Notifications
 
 Userplex provides a simple way for modules to send notifications to their users
-when accounts are created and deleted.
+when accounts are created, deleted, or reset.
 
 Modules only need to send a notification in a channel provided by the main
 userplex program, and don't need to know how to speak SMTP or other notification

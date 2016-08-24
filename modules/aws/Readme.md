@@ -74,7 +74,7 @@ modules:
           accountname: cloudservices-aws-dev
 
 ```
-Notifications are only sent on creation of user accounts. No notification is
+Notifications are sent on creation and reset of user accounts. No notification is
 sent on deletion of an account.
 
 The notification contains a username, a temporary password which must be changed
