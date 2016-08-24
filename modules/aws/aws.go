@@ -436,10 +436,13 @@ The account %q has been removed from %q.`, uid, r.p.AccountName)),
 // send it an email
 func (r *run) resetIamUser(uid string) {
 	var (
-		accesskey string
-		cako      *iam.CreateAccessKeyOutput
-		clpo      *iam.CreateLoginProfileOutput
-		laao      *iam.ListAccessKeysOutput
+		accesskey      string
+		accessKeyLimit = 2
+		cako           *iam.CreateAccessKeyOutput
+		glpo           *iam.GetLoginProfileOutput
+		ulpo           *iam.UpdateLoginProfileOutput
+		clpo           *iam.CreateLoginProfileOutput
+		laao           *iam.ListAccessKeysOutput
 	)
 
 	password := "P" + randToken() + "%"
@@ -454,24 +457,36 @@ func (r *run) resetIamUser(uid string) {
 			r.p.AccountName, uid, password)
 		goto notify
 	}
-	_, err = r.cli.DeleteLoginProfile(&iam.DeleteLoginProfileInput{
+	glpo, err = r.cli.GetLoginProfile(&iam.GetLoginProfileInput{
 		UserName: aws.String(uid),
 	})
-	// don't nil check output because if output is nil we still just create
 	if err != nil {
-		log.Printf("[error] aws %q: failed to delete login profile for user %q: %v",
-			r.p.AccountName, uid, err)
-		return
-	}
-	clpo, err = r.cli.CreateLoginProfile(&iam.CreateLoginProfileInput{
-		Password:              aws.String(password),
-		UserName:              aws.String(uid),
-		PasswordResetRequired: aws.Bool(true),
-	})
-	if err != nil || clpo == nil {
 		log.Printf("[error] aws %q: failed to create login profile for user %q: %v",
 			r.p.AccountName, uid, err)
 		return
+	}
+	if glpo == nil {
+		clpo, err = r.cli.CreateLoginProfile(&iam.CreateLoginProfileInput{
+			Password:              aws.String(password),
+			UserName:              aws.String(uid),
+			PasswordResetRequired: aws.Bool(true),
+		})
+		if err != nil || clpo == nil {
+			log.Printf("[error] aws %q: failed to create login profile for user %q: %v",
+				r.p.AccountName, uid, err)
+			return
+		}
+	} else {
+		ulpo, err = r.cli.UpdateLoginProfile(&iam.UpdateLoginProfileInput{
+			Password:              aws.String(password),
+			UserName:              aws.String(uid),
+			PasswordResetRequired: aws.Bool(true),
+		})
+		if err != nil || ulpo == nil {
+			log.Printf("[error] aws %q: failed to update login profile for user %q: %v",
+				r.p.AccountName, uid, err)
+			return
+		}
 	}
 	laao, err = r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
 		UserName: aws.String(uid),
@@ -484,7 +499,7 @@ func (r *run) resetIamUser(uid string) {
 	// only create an access key if user has fewer than
 	// hardcoded default # of access keys per user per
 	// http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
-	if len(laao.AccessKeyMetadata) < 2 {
+	if len(laao.AccessKeyMetadata) < accessKeyLimit {
 		cako, err = r.cli.CreateAccessKey(&iam.CreateAccessKeyInput{
 			UserName: aws.String(uid),
 		})
@@ -503,8 +518,8 @@ func (r *run) resetIamUser(uid string) {
 			*cako.AccessKey.AccessKeyId,
 			*cako.AccessKey.SecretAccessKey)
 	} else {
-		log.Printf("[warning] aws %q: cannot create additional access keys for %q: %v",
-			r.p.AccountName, uid, err)
+		log.Printf("[warning] aws %q: %q already has max of %d access keys",
+			r.p.AccountName, uid, accessKeyLimit)
 	}
 
 notify:
