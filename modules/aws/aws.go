@@ -488,38 +488,40 @@ func (r *run) resetIamUser(uid string) {
 			return
 		}
 	}
-	laao, err = r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
-		UserName: aws.String(uid),
-	})
-	if err != nil || laao == nil {
-		log.Printf("[error] aws %q: failed to list access keys for user %q: %v",
-			r.p.AccountName, uid, err)
-		return
-	}
-	// only create an access key if user has fewer than
-	// hardcoded default # of access keys per user per
-	// http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
-	if len(laao.AccessKeyMetadata) < accessKeyLimit {
-		cako, err = r.cli.CreateAccessKey(&iam.CreateAccessKeyInput{
+	if r.p.CreateAccessKey {
+		laao, err = r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
 			UserName: aws.String(uid),
 		})
-		if err != nil || cako == nil {
-			log.Printf("[error] aws %q: failed to create access key for user %q: %v",
+		if err != nil || laao == nil {
+			log.Printf("[error] aws %q: failed to list access keys for user %q: %v",
 				r.p.AccountName, uid, err)
 			return
 		}
-		accesskey = fmt.Sprintf(`
+		// only create an access key if user has fewer than
+		// hardcoded default # of access keys per user per
+		// http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
+		if len(laao.AccessKeyMetadata) > accessKeyLimit {
+			log.Printf("[warning] aws %q: %q already has max of %d access keys",
+				r.p.AccountName, uid, accessKeyLimit)
+		} else {
+			cako, err = r.cli.CreateAccessKey(&iam.CreateAccessKeyInput{
+				UserName: aws.String(uid),
+			})
+			if err != nil || cako == nil {
+				log.Printf("[error] aws %q: failed to create access key for user %q: %v",
+					r.p.AccountName, uid, err)
+				return
+			}
+			accesskey = fmt.Sprintf(`
 	A new access key has been created for you.
 	Add the lines below to ~/.aws/credentials
 	[%s]
 	aws_access_key_id = %s
 	aws_secret_access_key = %s`,
-			r.p.AccountName,
-			*cako.AccessKey.AccessKeyId,
-			*cako.AccessKey.SecretAccessKey)
-	} else {
-		log.Printf("[warning] aws %q: %q already has max of %d access keys",
-			r.p.AccountName, uid, accessKeyLimit)
+				r.p.AccountName,
+				*cako.AccessKey.AccessKeyId,
+				*cako.AccessKey.SecretAccessKey)
+		}
 	}
 
 notify:

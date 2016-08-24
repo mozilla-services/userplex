@@ -1,6 +1,6 @@
 AWS Module
 ==========
-This module creates and deletes users from aws accounts based on LDAP groups,
+This module creates, deletes, and resets users from aws accounts based on LDAP groups,
 and sent notifications to newly created users with their temporary password.
 
 Important note: because notifications contain passwords, this module requires
@@ -32,6 +32,7 @@ modules:
         - sysadmins
       create: true
       delete: true
+      reset: true
       parameters:
           iamgroups:
             - ldapmanaged

@@ -69,6 +69,7 @@ The base module configuration uses the following parameters:
 * `ldapgroups` is a list of ldap group DNs
 * `create` indicates whether user create is enabled
 * `delete` indicates whether user deletion is enabled
+* `reset` indicates whether user reset is enabled
 * `uidmap` is a mapping of UIDs as described in the next section
 * `credentials` contains module-specific credentials
 * `parameters` contains module-specific parameters
