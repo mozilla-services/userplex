@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/awsutil"
 	awscred "github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -53,7 +54,8 @@ type credentials struct {
 
 func (r *run) Run() (err error) {
 	var (
-		countCreated, countGroupUpdated, countDeleted int
+		countCreated, countGroupUpdated, countDeleted, countReset int
+		iamers                                                    map[string]bool
 	)
 	err = r.Conf.GetParameters(&r.p)
 	if err != nil {
@@ -69,6 +71,11 @@ func (r *run) Run() (err error) {
 	}
 	// Retrieve a list of ldap users from the groups configured
 	ldapers := r.getLdapers()
+
+	// Retrieve a list of iam users from the groups configured
+	if r.Conf.Delete || r.Conf.Reset {
+		iamers = r.getIamers()
+	}
 	// create or add the users to groups.
 	if r.Conf.Create {
 		for uid, haspubkey := range ldapers {
@@ -94,7 +101,6 @@ func (r *run) Run() (err error) {
 	}
 	// find which users are no longer in ldap and needs to be removed from aws
 	if r.Conf.Delete {
-		iamers := r.getIamers()
 		for uid, _ := range iamers {
 			if _, ok := ldapers[uid]; !ok {
 				r.debug("aws %q: %q found in IAM group but not in LDAP, needs deletion",
@@ -104,8 +110,20 @@ func (r *run) Run() (err error) {
 			}
 		}
 	}
-	log.Printf("[info] aws %q: summary created=%d, group_updated=%d, deleted=%d",
-		r.p.AccountName, countCreated, countGroupUpdated, countDeleted)
+	// reset access key and password for specified user
+	if r.Conf.Reset && r.Conf.ResetUsername != "" {
+		if _, ok := iamers[r.Conf.ResetUsername]; ok {
+			r.debug("aws %q: %q found, needs reset",
+				r.p.AccountName, r.Conf.ResetUsername)
+			r.resetIamUser(r.Conf.ResetUsername)
+			countReset++
+		} else {
+			log.Printf("[warning] aws %q: %q wanted reset but could not be found",
+				r.p.AccountName, r.Conf.ResetUsername)
+		}
+	}
+	log.Printf("[info] aws %q: summary created=%d, group_updated=%d, deleted=%d, reset=%d",
+		r.p.AccountName, countCreated, countGroupUpdated, countDeleted, countReset)
 	return
 }
 
@@ -410,6 +428,111 @@ notify:
 		MustEncrypt: false,
 		Body: []byte(fmt.Sprintf(`Deleted AWS account:
 The account %q has been removed from %q.`, uid, r.p.AccountName)),
+	}
+	return
+}
+
+// reset the password for a user in aws
+// assign temporary credentials and force password change
+// send it an email
+func (r *run) resetIamUser(uid string) {
+	var (
+		accesskey string
+		cako      *iam.CreateAccessKeyOutput
+		dlpo      *iam.DeleteLoginProfileOutput
+		clpo      *iam.CreateLoginProfileOutput
+		laao      *iam.ListAccessKeysOutput
+	)
+
+	password := "P" + randToken() + "%"
+	mail, err := r.Conf.LdapCli.GetUserEmailByUid(uid)
+	if err != nil {
+		log.Printf("[error] aws %q: couldn't find email of user %q in ldap, notification not sent: %v",
+			r.p.AccountName, uid, err)
+		return
+	}
+	if !r.Conf.ApplyChanges {
+		log.Printf("[dryrun] aws %q: would have reset AWS IAM user %q with password %q",
+			r.p.AccountName, uid, password)
+		goto notify
+	}
+	dlpo, err = r.cli.DeleteLoginProfile(&iam.DeleteLoginProfileInput{
+		UserName: aws.String(uid),
+	})
+	if err != nil || dlpo == nil {
+		// cast to awserr
+		if dlpoErr, ok := err.(awserr.Error); ok {
+			// if there is no login profile,
+			if dlpoErr.Code() != "NoSuchEntity" {
+				log.Printf("[error] aws %q: failed to delete login profile for user %q: %v",
+					r.p.AccountName, uid, err)
+				return
+			}
+		}
+	}
+	clpo, err = r.cli.CreateLoginProfile(&iam.CreateLoginProfileInput{
+		Password:              aws.String(password),
+		UserName:              aws.String(uid),
+		PasswordResetRequired: aws.Bool(true),
+	})
+	if err != nil || clpo == nil {
+		log.Printf("[error] aws %q: failed to create login profile for user %q: %v",
+			r.p.AccountName, uid, err)
+		return
+	}
+	laao, err = r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
+		UserName: aws.String(uid),
+	})
+	if err != nil || cako == nil {
+		log.Printf("[error] aws %q: failed to list access keys for user %q: %v",
+			r.p.AccountName, uid, err)
+		return
+	}
+	// only create an access key if user has fewer than
+	// hardcoded default # of access keys per user per
+	// http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
+	if len(laao.AccessKeyMetadata) <= 2 {
+		cako, err = r.cli.CreateAccessKey(&iam.CreateAccessKeyInput{
+			UserName: aws.String(uid),
+		})
+		if err != nil || cako == nil {
+			log.Printf("[error] aws %q: failed to create access key for user %q: %v",
+				r.p.AccountName, uid, err)
+			return
+		}
+		accesskey = fmt.Sprintf(`
+	A new access key has been created for you.
+	Add the lines below to ~/.aws/credentials
+	[%s]
+	aws_access_key_id = %s
+	aws_secret_access_key = %s`,
+			r.p.AccountName,
+			*cako.AccessKey.AccessKeyId,
+			*cako.AccessKey.SecretAccessKey)
+	} else {
+		log.Printf("[warning] aws %q: cannot create additional access keys for %q: %v",
+			r.p.AccountName, uid, err)
+	}
+
+notify:
+	// notify user
+	rcpt := r.Conf.Notify.Recipient
+	if rcpt == "{ldap:mail}" {
+		rcpt = mail
+	}
+
+	body := fmt.Sprintf(`Updated AWS account:
+login: %s
+pass:  %s (change at first login)
+url:   https://%s.signin.aws.amazon.com/console
+%s`, uid, password, r.p.AccountName, accesskey)
+
+	r.Conf.Notify.Channel <- modules.Notification{
+		Module:      "aws",
+		Recipient:   rcpt,
+		Mode:        r.Conf.Notify.Mode,
+		MustEncrypt: true,
+		Body:        []byte(body),
 	}
 	return
 }

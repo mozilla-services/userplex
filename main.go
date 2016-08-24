@@ -62,6 +62,7 @@ var once = flag.Bool("once", false, "Run only once and exit, don't enter the cro
 var runmod = flag.String("module", "all", "Module to run. if 'all', run all available modules (default)")
 var showVersion = flag.Bool("V", false, "Show version and exit")
 var debug = flag.Bool("D", false, "Enable debug logging")
+var resetUsername = flag.String("reset", "", "Reset access key and password for a user")
 
 func main() {
 	var (
@@ -172,6 +173,7 @@ func run(conf conf) {
 		conf.Modules[i].LdapCli = cli
 		conf.Modules[i].Notify.Channel = notifchan
 		conf.Modules[i].Debug = *debug
+		conf.Modules[i].ResetUsername = *resetUsername
 	}
 
 	// run each module in the order it appears in the configuration
