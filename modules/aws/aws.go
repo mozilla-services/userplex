@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/awsutil"
 	awscred "github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -439,7 +438,6 @@ func (r *run) resetIamUser(uid string) {
 	var (
 		accesskey string
 		cako      *iam.CreateAccessKeyOutput
-		dlpo      *iam.DeleteLoginProfileOutput
 		clpo      *iam.CreateLoginProfileOutput
 		laao      *iam.ListAccessKeysOutput
 	)
@@ -456,19 +454,14 @@ func (r *run) resetIamUser(uid string) {
 			r.p.AccountName, uid, password)
 		goto notify
 	}
-	dlpo, err = r.cli.DeleteLoginProfile(&iam.DeleteLoginProfileInput{
+	_, err = r.cli.DeleteLoginProfile(&iam.DeleteLoginProfileInput{
 		UserName: aws.String(uid),
 	})
-	if err != nil || dlpo == nil {
-		// cast to awserr
-		if dlpoErr, ok := err.(awserr.Error); ok {
-			// if there is no login profile,
-			if dlpoErr.Code() != "NoSuchEntity" {
-				log.Printf("[error] aws %q: failed to delete login profile for user %q: %v",
-					r.p.AccountName, uid, err)
-				return
-			}
-		}
+	// don't nil check output because if output is nil we still just create
+	if err != nil {
+		log.Printf("[error] aws %q: failed to delete login profile for user %q: %v",
+			r.p.AccountName, uid, err)
+		return
 	}
 	clpo, err = r.cli.CreateLoginProfile(&iam.CreateLoginProfileInput{
 		Password:              aws.String(password),
@@ -483,7 +476,7 @@ func (r *run) resetIamUser(uid string) {
 	laao, err = r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
 		UserName: aws.String(uid),
 	})
-	if err != nil || cako == nil {
+	if err != nil || laao == nil {
 		log.Printf("[error] aws %q: failed to list access keys for user %q: %v",
 			r.p.AccountName, uid, err)
 		return
@@ -491,7 +484,7 @@ func (r *run) resetIamUser(uid string) {
 	// only create an access key if user has fewer than
 	// hardcoded default # of access keys per user per
 	// http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
-	if len(laao.AccessKeyMetadata) <= 2 {
+	if len(laao.AccessKeyMetadata) < 2 {
 		cako, err = r.cli.CreateAccessKey(&iam.CreateAccessKeyInput{
 			UserName: aws.String(uid),
 		})
