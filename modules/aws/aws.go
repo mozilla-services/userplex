@@ -82,15 +82,15 @@ func (r *run) Run() (err error) {
 	}
 
 	oneOffUserMap := make(map[string]operation)
-	if r.Conf.ResetUsername != "" ||
-		r.Conf.DeleteUsername != "" ||
-		r.Conf.CreateUsername != "" {
+	if r.Conf.ResetUsers != "" ||
+		r.Conf.DeleteUsers != "" ||
+		r.Conf.CreateUsers != "" {
 
 		// get users for each operation, set them in map
 		// if there are duplicate users across operations, error
-		resetUsers := strings.Split(strings.Trim(r.Conf.ResetUsername, ", "), ",")
-		createUsers := strings.Split(strings.Trim(r.Conf.CreateUsername, ", "), ",")
-		deleteUsers := strings.Split(strings.Trim(r.Conf.DeleteUsername, ", "), ",")
+		resetUsers := strings.Split(strings.Trim(r.Conf.ResetUsers, ", "), ",")
+		createUsers := strings.Split(strings.Trim(r.Conf.CreateUsers, ", "), ",")
+		deleteUsers := strings.Split(strings.Trim(r.Conf.DeleteUsers, ", "), ",")
 
 		overlapError := fmt.Errorf(`None of -reset, -delete, and -create cannot have the same users specified.
 -reset=%v
@@ -126,7 +126,7 @@ func (r *run) Run() (err error) {
 	}
 
 	// reset specified users
-	if r.Conf.ResetUsername != "" {
+	if r.Conf.ResetUsers != "" {
 		for user, op := range oneOffUserMap {
 			if op != reset {
 				continue
@@ -141,7 +141,7 @@ func (r *run) Run() (err error) {
 		}
 	}
 	// delete specified users
-	if r.Conf.DeleteUsername != "" {
+	if r.Conf.DeleteUsers != "" {
 		for user, op := range oneOffUserMap {
 			if op != delete {
 				continue
@@ -156,7 +156,7 @@ func (r *run) Run() (err error) {
 		}
 	}
 	// create specified users
-	if r.Conf.CreateUsername != "" {
+	if r.Conf.CreateUsers != "" {
 		for user, op := range oneOffUserMap {
 			if op != create {
 				continue
@@ -172,7 +172,7 @@ func (r *run) Run() (err error) {
 	}
 
 	// exit if this was a one-off run
-	if r.Conf.CreateUsername != "" || r.Conf.DeleteUsername != "" || r.Conf.ResetUsername != "" {
+	if r.Conf.CreateUsers != "" || r.Conf.DeleteUsers != "" || r.Conf.ResetUsers != "" {
 		return nil
 	}
 
@@ -424,9 +424,6 @@ func (r *run) removeIamUser(uid string) {
 		dako *iam.DeleteAccessKeyOutput
 		rufg *iam.RemoveUserFromGroupOutput
 	)
-
-	body := fmt.Sprintf(`Deleted AWS account:
-The account %q has been removed from %q.`, uid, r.p.AccountName)
 
 	// remove all user's access keys
 	lakfu, err := r.cli.ListAccessKeys(&iam.ListAccessKeysInput{

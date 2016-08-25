@@ -13,22 +13,22 @@ import (
 
 // Configuration holds module specific parameters
 type Configuration struct {
-	Name           string         `yaml:"name" json:"name"`
-	LdapGroups     []string       `yaml:"ldapgroups" json:"ldapgroups"`
-	UidMap         []umap         `yaml:"uidmap" json:"uidmap"`
-	Create         bool           `yaml:"create" json:"create"`
-	Delete         bool           `yaml:"delete" json:"delete"`
-	Reset          bool           `yaml:"reset" json:"reset"`
-	ResetUsername  string         `yaml:"resetusername" json:"resetusername"`
-	CreateUsername string         `yaml:"createusername" json:"resetusername"`
-	DeleteUsername string         `yaml:"deleteusername" json:"resetusername"`
-	Notify         NotifyConf     `yaml:"notify" json:"notify"`
-	Credentials    interface{}    `yaml:"credentials" json:"credentials"`
-	Parameters     interface{}    `yaml:"parameters" json:"parameters"`
-	ApplyChanges   bool           `yaml:"applychanges" json:"applychanges"`
-	NotifyUsers    bool           `yaml:"notifyusers" json:"notifyusers"`
-	LdapCli        mozldap.Client `yaml:"-" json:"-"`
-	Debug          bool           `yaml:"-" json:"-"`
+	Name         string         `yaml:"name" json:"name"`
+	LdapGroups   []string       `yaml:"ldapgroups" json:"ldapgroups"`
+	UidMap       []umap         `yaml:"uidmap" json:"uidmap"`
+	Create       bool           `yaml:"create" json:"create"`
+	Delete       bool           `yaml:"delete" json:"delete"`
+	Reset        bool           `yaml:"reset" json:"reset"`
+	ResetUsers   string         `yaml:"resetusers" json:"resetusers"`
+	CreateUsers  string         `yaml:"createusers" json:"createusers"`
+	DeleteUsers  string         `yaml:"deleteusers" json:"deleteusers"`
+	Notify       NotifyConf     `yaml:"notify" json:"notify"`
+	Credentials  interface{}    `yaml:"credentials" json:"credentials"`
+	Parameters   interface{}    `yaml:"parameters" json:"parameters"`
+	ApplyChanges bool           `yaml:"applychanges" json:"applychanges"`
+	NotifyUsers  bool           `yaml:"notifyusers" json:"notifyusers"`
+	LdapCli      mozldap.Client `yaml:"-" json:"-"`
+	Debug        bool           `yaml:"-" json:"-"`
 }
 
 type NotifyConf struct {
