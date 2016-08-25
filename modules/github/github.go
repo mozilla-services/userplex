@@ -7,6 +7,7 @@
 package github
 
 import (
+	"fmt"
 	"log"
 	"strings"
 
@@ -40,11 +41,12 @@ type organization struct {
 }
 
 type parameters struct {
-	Organizations []organization
+	Organizations    []organization
+	UserplexTeamName string
 }
 
 type credentials struct {
-	oauthToken string
+	OAuthToken string `yaml:"oauthtoken"`
 }
 
 func (r *run) Run() error {
@@ -59,8 +61,12 @@ func (r *run) Run() error {
 		return err
 	}
 
+	if r.p.UserplexTeamName == "" {
+		return fmt.Errorf("[error] github: UserplexTeamName is not set")
+	}
+
 	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: r.c.oauthToken},
+		&oauth2.Token{AccessToken: r.c.OAuthToken},
 	)
 	tc := oauth2.NewClient(oauth2.NoContext, ts)
 	r.ghclient = github.NewClient(tc)
@@ -70,11 +76,21 @@ func (r *run) Run() error {
 	for _, org := range r.p.Organizations {
 		// get all teams for the organization
 		// name -> team
-		teamsMap := r.getTeamsMap(org)
+		teamsMap := r.getOrgTeamsMap(org)
+
+		if _, ok := teamsMap[r.p.UserplexTeamName]; !ok {
+			log.Printf("[error] github: could not find Userplex team %s for organization %s", r.p.UserplexTeamName, org.Name)
+			continue
+		}
+
+		var userplexedUsers map[string]bool
+		if _, ok := teamsMap[r.p.UserplexTeamName]; ok {
+			userplexedUsers = r.getTeamMembersMap(teamsMap[r.p.UserplexTeamName])
+		}
 
 		// get all members for the organization
 		// name -> bool
-		membersMap := r.getMembersMap(org)
+		membersMap := r.getOrgMembersMap(org)
 
 		// member or admin
 		membershipType := "member"
@@ -82,19 +98,37 @@ func (r *run) Run() error {
 		for user := range ldapers {
 			// set to true to indicate that user in github has ldap match
 			membersMap[user] = true
-			if user != "milescrabill" {
+			if user != "milescrabill" && user != "mcrabill" {
 				continue
 			}
-			// if the user's ldap account is in the organization already
+
+			// not managed by userplex
+			if _, ok := userplexedUsers[user]; !ok {
+				continue
+			}
+
+			// if the user is in the organization already
 			if _, ok := membersMap[user]; ok {
 				if r.Conf.Debug {
 					log.Printf("[debug] github: user %s is already a member of organization %s", user, org)
 				}
+				// check whether the user is in each team
+				shouldContinue := true
+				for _, team := range teamsMap {
+					var isInTeam bool
+					isInTeam, resp, err = r.ghclient.Organizations.IsTeamMember(*team.ID, user)
+					if !isInTeam {
+						shouldContinue = false
+					}
+				}
+				if shouldContinue {
+					continue
+				}
 			}
-			if r.Conf.ApplyChanges && r.Conf.Create {
-				for _, teamName := range org.Teams {
-					// if the team in config exists on github
-					if team, ok := teamsMap[teamName]; ok {
+			for _, teamName := range org.Teams {
+				// if the team in config exists on github
+				if team, ok := teamsMap[teamName]; ok {
+					if r.Conf.ApplyChanges && r.Conf.Create {
 						// add user to team
 						_, resp, err = r.ghclient.Organizations.AddTeamMembership(*team.ID, user, &github.OrganizationAddTeamMembershipOptions{
 							Role: membershipType,
@@ -102,17 +136,27 @@ func (r *run) Run() error {
 						if err != nil || resp.StatusCode != 200 {
 							log.Printf("[error] github: could not add user %s to %s: %s, error: %v with status %s", user, org.Name, *team.Name, err, resp.Status)
 						}
-					} else {
-						log.Printf("[error] github: could not find team %s for organization %s", team, org.Name)
 					}
+				} else {
+					log.Printf("[error] github: could not find team %s for organization %s", team, org.Name)
 				}
 			}
+			if !r.Conf.ApplyChanges {
+				log.Printf("[dryrun] Userplex would have added %s to GitHub organization %s and teams %v", user, org.Name, org.Teams)
+			} else {
+				r.notify(user, fmt.Sprintf("Userplex added %s to GitHub organization %s and teams %v", user, org.Name, org.Teams))
+			}
 		}
-		for user, inLdap := range membersMap {
-			// users who exists in github org but not in ldap
-			if !inLdap {
+		for user := range membersMap {
+			// userplexed users not in ldap
+			_, isUserplexed := userplexedUsers[user]
+			if !membersMap[user] && isUserplexed {
 				log.Printf("[info] user %v is not in ldap groups %v but is a member of github organization %s", user, r.Conf.LdapGroups, org.Name)
-				// TODO: not realistic to enable ever
+				if !r.Conf.ApplyChanges {
+					log.Printf("[dryrun] Userplex would have removed %s from GitHub organization %s", user, org.Name)
+				} else {
+					r.notify(user, fmt.Sprintf("Userplex removed %s to GitHub organization %s", user, org.Name))
+				}
 				if r.Conf.ApplyChanges && r.Conf.Delete && 1 == 0 {
 					resp, err = r.ghclient.Organizations.RemoveOrgMembership(org.Name, user)
 					if err != nil || resp.StatusCode != 200 {
@@ -122,10 +166,36 @@ func (r *run) Run() error {
 			}
 		}
 	}
+
 	return nil
 }
 
-func (r *run) getMembersMap(org organization) map[string]bool {
+func (r *run) notify(user string, body string) (err error) {
+	rcpt := r.Conf.Notify.Recipient
+	if rcpt == "{ldap:mail}" {
+		// reverse the uid map
+		for _, mapping := range r.Conf.UidMap {
+			if mapping.LocalUID == user {
+				user = mapping.LdapUid
+			}
+		}
+		rcpt, err = r.Conf.LdapCli.GetUserEmailByUid(user)
+		if err != nil {
+			log.Printf("[error] github: couldn't find email of user %q in ldap, notification not sent: %v", user, err)
+			return
+		}
+	}
+	r.Conf.Notify.Channel <- modules.Notification{
+		Module:      "github",
+		Recipient:   rcpt,
+		Mode:        r.Conf.Notify.Mode,
+		MustEncrypt: false,
+		Body:        []byte(body),
+	}
+	return
+}
+
+func (r *run) getOrgMembersMap(org organization) map[string]bool {
 	members, resp, err := r.ghclient.Organizations.ListMembers(org.Name, nil)
 	if err != nil || resp.StatusCode != 200 {
 		log.Printf("[error] github: could not list members for organization %s, error: %v with status %s", org, err, resp.Status)
@@ -137,7 +207,19 @@ func (r *run) getMembersMap(org organization) map[string]bool {
 	return membersMap
 }
 
-func (r *run) getTeamsMap(org organization) map[string]*github.Team {
+func (r *run) getTeamMembersMap(team *github.Team) map[string]bool {
+	members, resp, err := r.ghclient.Organizations.ListTeamMembers(*team.ID, nil)
+	if err != nil || resp.StatusCode != 200 {
+		log.Printf("[error] github: could not list members for organization %s, error: %v with status %s", team, err, resp.Status)
+	}
+	membersMap := make(map[string]bool)
+	for _, member := range members {
+		membersMap[*member.Login] = false
+	}
+	return membersMap
+}
+
+func (r *run) getOrgTeamsMap(org organization) map[string]*github.Team {
 	teamsMap := make(map[string]*github.Team)
 	teams, resp, err := r.ghclient.Organizations.ListTeams(org.Name, nil)
 	if err != nil || resp.StatusCode != 200 {
@@ -168,7 +250,7 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 				uid = mapping.LocalUID
 			}
 		}
-		lgm[uid] = true
+		lgm[uid] = false
 	}
 	return
 }
