@@ -504,6 +504,12 @@ func (r *run) notify(uid, body string) {
 	// notify user
 	rcpt := r.Conf.Notify.Recipient
 	if rcpt == "{ldap:mail}" {
+		// reverse the uid map
+		for _, mapping := range r.Conf.UidMap {
+			if mapping.LocalUID == uid {
+				uid = mapping.LdapUid
+			}
+		}
 		mail, err := r.Conf.LdapCli.GetUserEmailByUid(uid)
 		if err != nil {
 			log.Printf("[error] aws %q: couldn't find email of user %q in ldap, notification not sent: %v",
