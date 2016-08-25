@@ -475,15 +475,14 @@ The account %q has been removed from %q.`, uid, r.p.AccountName)
 // send it an email
 func (r *run) resetIamUser(uid string) {
 	var (
-		accesskey      string
-		accessKeyLimit = 2
-		cako           *iam.CreateAccessKeyOutput
-		glpo           *iam.GetLoginProfileOutput
-		ulpo           *iam.UpdateLoginProfileOutput
-		clpo           *iam.CreateLoginProfileOutput
-		lako           *iam.ListAccessKeysOutput
-		dako           *iam.DeleteAccessKeyOutput
-		err            error
+		accesskey string
+		cako      *iam.CreateAccessKeyOutput
+		glpo      *iam.GetLoginProfileOutput
+		ulpo      *iam.UpdateLoginProfileOutput
+		clpo      *iam.CreateLoginProfileOutput
+		lako      *iam.ListAccessKeysOutput
+		dako      *iam.DeleteAccessKeyOutput
+		err       error
 	)
 
 	password := "P" + randToken() + "%"
