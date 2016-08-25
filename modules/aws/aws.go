@@ -51,10 +51,22 @@ type credentials struct {
 	SecretKey string
 }
 
+type operation int
+
+const (
+	reset operation = iota
+	delete
+	create
+	none
+)
+
 func (r *run) Run() (err error) {
 	var (
-		countCreated, countGroupUpdated, countDeleted, countReset int
-		iamers                                                    map[string]bool
+		countCreated,
+		countGroupUpdated,
+		countDeleted,
+		countReset int
+		iamers map[string]bool
 	)
 	err = r.Conf.GetParameters(&r.p)
 	if err != nil {
@@ -69,114 +81,137 @@ func (r *run) Run() (err error) {
 		return fmt.Errorf("failed to connect to aws using access key %q", r.c.AccessKey)
 	}
 
-	if r.Conf.ResetUsername == r.Conf.DeleteUsername ||
-		r.Conf.DeleteUsername == r.Conf.CreateUsername ||
-		r.Conf.CreateUsername == r.Conf.ResetUsername {
-		return fmt.Errorf("None of ResetUsername, DeleteUsername, CreateUsername can be the same.")
+	oneOffUserMap := make(map[string]operation)
+	if r.Conf.ResetUsername != "" ||
+		r.Conf.DeleteUsername != "" ||
+		r.Conf.CreateUsername != "" {
+
+		// get users for each operation, set them in map
+		// if there are duplicate users across operations, error
+		resetUsers := strings.Split(strings.Trim(r.Conf.ResetUsername, ", "), ",")
+		createUsers := strings.Split(strings.Trim(r.Conf.CreateUsername, ", "), ",")
+		deleteUsers := strings.Split(strings.Trim(r.Conf.DeleteUsername, ", "), ",")
+
+		overlapError := fmt.Errorf(`None of -reset, -delete, and -create cannot have the same users specified.
+-reset=%v
+-delete=%v
+-create=%v`, resetUsers, deleteUsers, createUsers)
+
+		for _, user := range resetUsers {
+			if user == "" {
+				continue
+			}
+			oneOffUserMap[user] = reset
+		}
+		for _, user := range createUsers {
+			if user == "" {
+				continue
+			}
+			if _, ok := oneOffUserMap[user]; !ok {
+				oneOffUserMap[user] = create
+			} else {
+				return overlapError
+			}
+		}
+		for _, user := range deleteUsers {
+			if user == "" {
+				continue
+			}
+			if _, ok := oneOffUserMap[user]; !ok {
+				oneOffUserMap[user] = delete
+			} else {
+				return overlapError
+			}
+		}
 	}
 
 	// reset specified users
 	if r.Conf.ResetUsername != "" {
-		users := strings.Split(r.Conf.CreateUsername, ",")
-		for _, user := range users {
-			uid, _, err := r.getLdaper(user)
+		for user, op := range oneOffUserMap {
+			if op != reset {
+				continue
+			}
+			uid, _, err := r.getLdaperByUID(user)
 			if err != nil {
 				// logging happens in getLdaper
 				return err
 			}
-			if _, ok := iamers[uid]; ok {
-				r.debug("aws %q: %q found, needs reset",
-					r.p.AccountName, r.Conf.ResetUsername)
-				r.resetIamUser(r.Conf.ResetUsername)
-				countReset++
-			} else {
-				log.Printf("[warning] aws %q: %q wanted reset but could not be found",
-					r.p.AccountName, r.Conf.ResetUsername)
-			}
+			r.resetIamUser(uid)
+			countReset++
 		}
 	}
 	// delete specified users
 	if r.Conf.DeleteUsername != "" {
-		users := strings.Split(r.Conf.DeleteUsername, ",")
-		for _, user := range users {
-			uid, _, err := r.getLdaper(user)
+		for user, op := range oneOffUserMap {
+			if op != delete {
+				continue
+			}
+			uid, _, err := r.getLdaperByUID(user)
 			if err != nil {
 				// logging happens in getLdaper
 				return err
 			}
-			if _, ok := iamers[uid]; ok {
-				r.debug("aws %q: %q found, needs delete",
-					r.p.AccountName, r.Conf.DeleteUsername)
-				r.removeIamUser(r.Conf.DeleteUsername)
-				countDeleted++
-			} else {
-				log.Printf("[warning] aws %q: %q wanted delete but could not be found",
-					r.p.AccountName, r.Conf.DeleteUsername)
-			}
+			r.removeIamUser(uid)
+			countDeleted++
 		}
 	}
 	// create specified users
 	if r.Conf.CreateUsername != "" {
-		users := strings.Split(r.Conf.CreateUsername, ",")
-		for _, user := range users {
-			uid, _, err := r.getLdaper(user)
+		for user, op := range oneOffUserMap {
+			if op != create {
+				continue
+			}
+			uid, _, err := r.getLdaperByUID(user)
 			if err != nil {
 				// logging happens in getLdaper
 				return err
 			}
-			if _, ok := iamers[uid]; ok {
-				r.debug("aws %q: %q found, needs create",
-					r.p.AccountName, r.Conf.CreateUsername)
-				r.createIamUser(r.Conf.CreateUsername)
+			r.createIamUser(uid)
+			countCreated++
+		}
+	}
+
+	// exit if this was a one-off run
+	if r.Conf.CreateUsername != "" || r.Conf.DeleteUsername != "" || r.Conf.ResetUsername != "" {
+		return nil
+	}
+
+	// Retrieve a list of ldap users from the groups configured
+	ldapers := r.getLdapers()
+
+	// create or add the users to groups.
+	if r.Conf.Create {
+		for uid, haspubkey := range ldapers {
+			resp, err := r.cli.GetUser(&iam.GetUserInput{
+				UserName: aws.String(uid),
+			})
+			if err != nil || resp == nil {
+				log.Printf("[info] aws %q: user %q not found, needs to be created",
+					r.p.AccountName, uid)
+				if !haspubkey && r.Conf.NotifyUsers {
+					log.Printf("[warning] aws %q: %q has no PGP fingerprint in LDAP, skipping creation",
+						r.p.AccountName, uid)
+					continue
+				}
+				r.createIamUser(uid)
 				countCreated++
 			} else {
-				log.Printf("[warning] aws %q: %q wanted create but could not be found",
-					r.p.AccountName, r.Conf.CreateUsername)
-			}
-		}
-
-		// exit if this was a one-off run
-		if r.Conf.CreateUsername != "" || r.Conf.DeleteUsername != "" || r.Conf.ResetUsername != "" {
-			return nil
-		}
-
-		// Retrieve a list of ldap users from the groups configured
-		ldapers := r.getLdapers()
-
-		// create or add the users to groups.
-		if r.Conf.Create {
-			for uid, haspubkey := range ldapers {
-				resp, err := r.cli.GetUser(&iam.GetUserInput{
-					UserName: aws.String(uid),
-				})
-				if err != nil || resp == nil {
-					log.Printf("[info] aws %q: user %q not found, needs to be created",
-						r.p.AccountName, uid)
-					if !haspubkey && r.Conf.NotifyUsers {
-						log.Printf("[warning] aws %q: %q has no PGP fingerprint in LDAP, skipping creation",
-							r.p.AccountName, uid)
-						continue
-					}
-					r.createIamUser(uid)
-					countCreated++
-				} else {
-					if r.updateUserGroups(uid) {
-						countGroupUpdated++
-					}
+				if r.updateUserGroups(uid) {
+					countGroupUpdated++
 				}
 			}
 		}
-		// find which users are no longer in ldap and needs to be removed from aws
-		if r.Conf.Delete {
-			// Retrieve a list of iam users from the groups configured
-			iamers = r.getIamers()
-			for uid := range iamers {
-				if _, ok := ldapers[uid]; !ok {
-					r.debug("aws %q: %q found in IAM group but not in LDAP, needs deletion",
-						r.p.AccountName, uid)
-					r.removeIamUser(uid)
-					countDeleted++
-				}
+	}
+	// find which users are no longer in ldap and needs to be removed from aws
+	if r.Conf.Delete {
+		// Retrieve a list of iam users from the groups configured
+		iamers = r.getIamers()
+		for uid := range iamers {
+			if _, ok := ldapers[uid]; !ok {
+				r.debug("aws %q: %q found in IAM group but not in LDAP, needs deletion",
+					r.p.AccountName, uid)
+				r.removeIamUser(uid)
+				countDeleted++
 			}
 		}
 	}
@@ -192,7 +227,8 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 		return
 	}
 	for _, user := range users {
-		uid, hasPGPKey, err := r.getLdaper(user)
+		shortdn := strings.Split(user, ",")[0]
+		uid, hasPGPKey, err := r.getLdaper(shortdn)
 		if err != nil {
 			// error logging happens in getLdaper
 			continue
@@ -202,10 +238,20 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 	return
 }
 
-func (r *run) getLdaper(ldapUser string) (uid string, hasPGPKey bool, err error) {
+func (r *run) getLdaperByUID(ldapUserId string) (uid string, hasPGPKey bool, err error) {
+	var user string
+	user, err = r.Conf.LdapCli.GetUserDNById(ldapUserId)
+	shortdn := strings.Split(user, ",")[0]
+	if err != nil {
+		log.Printf("[error] aws %q: ldap query failed with error %v", r.p.AccountName, err)
+		return
+	}
+	return r.getLdaper(shortdn)
+}
+
+func (r *run) getLdaper(shortdn string) (uid string, hasPGPKey bool, err error) {
 	// assume it exists
 	hasPGPKey = true
-	shortdn := strings.Split(ldapUser, ",")[0]
 	uid, err = r.Conf.LdapCli.GetUserId(shortdn)
 	if err != nil {
 		log.Printf("[error] aws %q: ldap query failed with error %v", r.p.AccountName, err)
