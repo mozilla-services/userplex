@@ -68,59 +68,116 @@ func (r *run) Run() (err error) {
 	if r.cli == nil {
 		return fmt.Errorf("failed to connect to aws using access key %q", r.c.AccessKey)
 	}
-	// Retrieve a list of ldap users from the groups configured
-	ldapers := r.getLdapers()
 
-	// Retrieve a list of iam users from the groups configured
-	if r.Conf.Delete || r.Conf.Reset {
-		iamers = r.getIamers()
+	if r.Conf.ResetUsername == r.Conf.DeleteUsername ||
+		r.Conf.DeleteUsername == r.Conf.CreateUsername ||
+		r.Conf.CreateUsername == r.Conf.ResetUsername {
+		return fmt.Errorf("None of ResetUsername, DeleteUsername, CreateUsername can be the same.")
 	}
-	// create or add the users to groups.
-	if r.Conf.Create {
-		for uid, haspubkey := range ldapers {
-			resp, err := r.cli.GetUser(&iam.GetUserInput{
-				UserName: aws.String(uid),
-			})
-			if err != nil || resp == nil {
-				log.Printf("[info] aws %q: user %q not found, needs to be created",
-					r.p.AccountName, uid)
-				if !haspubkey && r.Conf.NotifyUsers {
-					log.Printf("[warning] aws %q: %q has no PGP fingerprint in LDAP, skipping creation",
-						r.p.AccountName, uid)
-					continue
-				}
-				r.createIamUser(uid)
+
+	// reset specified users
+	if r.Conf.ResetUsername != "" {
+		users := strings.Split(r.Conf.CreateUsername, ",")
+		for _, user := range users {
+			uid, _, err := r.getLdaper(user)
+			if err != nil {
+				// logging happens in getLdaper
+				return err
+			}
+			if _, ok := iamers[uid]; ok {
+				r.debug("aws %q: %q found, needs reset",
+					r.p.AccountName, r.Conf.ResetUsername)
+				r.resetIamUser(r.Conf.ResetUsername)
+				countReset++
+			} else {
+				log.Printf("[warning] aws %q: %q wanted reset but could not be found",
+					r.p.AccountName, r.Conf.ResetUsername)
+			}
+		}
+	}
+	// delete specified users
+	if r.Conf.DeleteUsername != "" {
+		users := strings.Split(r.Conf.DeleteUsername, ",")
+		for _, user := range users {
+			uid, _, err := r.getLdaper(user)
+			if err != nil {
+				// logging happens in getLdaper
+				return err
+			}
+			if _, ok := iamers[uid]; ok {
+				r.debug("aws %q: %q found, needs delete",
+					r.p.AccountName, r.Conf.DeleteUsername)
+				r.removeIamUser(r.Conf.DeleteUsername)
+				countDeleted++
+			} else {
+				log.Printf("[warning] aws %q: %q wanted delete but could not be found",
+					r.p.AccountName, r.Conf.DeleteUsername)
+			}
+		}
+	}
+	// create specified users
+	if r.Conf.CreateUsername != "" {
+		users := strings.Split(r.Conf.CreateUsername, ",")
+		for _, user := range users {
+			uid, _, err := r.getLdaper(user)
+			if err != nil {
+				// logging happens in getLdaper
+				return err
+			}
+			if _, ok := iamers[uid]; ok {
+				r.debug("aws %q: %q found, needs create",
+					r.p.AccountName, r.Conf.CreateUsername)
+				r.createIamUser(r.Conf.CreateUsername)
 				countCreated++
 			} else {
-				if r.updateUserGroups(uid) {
-					countGroupUpdated++
+				log.Printf("[warning] aws %q: %q wanted create but could not be found",
+					r.p.AccountName, r.Conf.CreateUsername)
+			}
+		}
+
+		// exit if this was a one-off run
+		if r.Conf.CreateUsername != "" || r.Conf.DeleteUsername != "" || r.Conf.ResetUsername != "" {
+			return nil
+		}
+
+		// Retrieve a list of ldap users from the groups configured
+		ldapers := r.getLdapers()
+
+		// create or add the users to groups.
+		if r.Conf.Create {
+			for uid, haspubkey := range ldapers {
+				resp, err := r.cli.GetUser(&iam.GetUserInput{
+					UserName: aws.String(uid),
+				})
+				if err != nil || resp == nil {
+					log.Printf("[info] aws %q: user %q not found, needs to be created",
+						r.p.AccountName, uid)
+					if !haspubkey && r.Conf.NotifyUsers {
+						log.Printf("[warning] aws %q: %q has no PGP fingerprint in LDAP, skipping creation",
+							r.p.AccountName, uid)
+						continue
+					}
+					r.createIamUser(uid)
+					countCreated++
+				} else {
+					if r.updateUserGroups(uid) {
+						countGroupUpdated++
+					}
 				}
 			}
 		}
-	}
-	// find which users are no longer in ldap and needs to be removed from aws
-	if r.Conf.Delete {
-		for uid := range iamers {
-			if _, ok := ldapers[uid]; !ok {
-				r.debug("aws %q: %q found in IAM group but not in LDAP, needs deletion",
-					r.p.AccountName, uid)
-				r.removeIamUser(uid)
-				countDeleted++
+		// find which users are no longer in ldap and needs to be removed from aws
+		if r.Conf.Delete {
+			// Retrieve a list of iam users from the groups configured
+			iamers = r.getIamers()
+			for uid := range iamers {
+				if _, ok := ldapers[uid]; !ok {
+					r.debug("aws %q: %q found in IAM group but not in LDAP, needs deletion",
+						r.p.AccountName, uid)
+					r.removeIamUser(uid)
+					countDeleted++
+				}
 			}
-		}
-	}
-	// reset access key and password for specified user
-	if !r.Conf.Reset && r.Conf.ResetUsername != "" {
-		log.Printf("[warning] aws %q: -reset flag processed for uid %s but reset is disabled in module config", r.p.AccountName, r.Conf.ResetUsername)
-	} else if r.Conf.Reset {
-		if _, ok := iamers[r.Conf.ResetUsername]; ok {
-			r.debug("aws %q: %q found, needs reset",
-				r.p.AccountName, r.Conf.ResetUsername)
-			r.resetIamUser(r.Conf.ResetUsername)
-			countReset++
-		} else {
-			log.Printf("[warning] aws %q: %q wanted reset but could not be found",
-				r.p.AccountName, r.Conf.ResetUsername)
 		}
 	}
 	log.Printf("[info] aws %q: summary created=%d, group_updated=%d, deleted=%d, reset=%d",
@@ -135,28 +192,39 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 		return
 	}
 	for _, user := range users {
-		shortdn := strings.Split(user, ",")[0]
-		uid, err := r.Conf.LdapCli.GetUserId(shortdn)
+		uid, hasPGPKey, err := r.getLdaper(user)
 		if err != nil {
-			log.Printf("[error] aws %q: ldap query failed with error %v", r.p.AccountName, err)
+			// error logging happens in getLdaper
 			continue
 		}
-		// apply the uid map: only store the translated uid in the ldapuid
-		for _, mapping := range r.Conf.UidMap {
-			if mapping.LdapUid == uid {
-				uid = mapping.LocalUID
-			}
+		lgm[uid] = hasPGPKey
+	}
+	return
+}
+
+func (r *run) getLdaper(ldapUser string) (uid string, hasPGPKey bool, err error) {
+	// assume it exists
+	hasPGPKey = true
+	shortdn := strings.Split(ldapUser, ",")[0]
+	uid, err = r.Conf.LdapCli.GetUserId(shortdn)
+	if err != nil {
+		log.Printf("[error] aws %q: ldap query failed with error %v", r.p.AccountName, err)
+		return
+	}
+	// apply the uid map: only store the translated uid in the ldapuid
+	for _, mapping := range r.Conf.UidMap {
+		if mapping.LdapUid == uid {
+			uid = mapping.LocalUID
 		}
-		lgm[uid] = true
-		if r.Conf.NotifyUsers {
-			// make sure we can find a PGP public key for the user to encrypt the notification
-			// if no pubkey is found, log an error and set the user's entry to False
-			_, err = r.Conf.LdapCli.GetUserPGPKey(shortdn)
-			if err != nil {
-				r.debug("aws %q: no pgp public key could be found for %s: %v",
-					r.p.AccountName, shortdn, err)
-				lgm[uid] = false
-			}
+	}
+	if r.Conf.NotifyUsers {
+		// make sure we can find a PGP public key for the user to encrypt the notification
+		// if no pubkey is found, log an error and set the user's entry to False
+		_, err = r.Conf.LdapCli.GetUserPGPKey(shortdn)
+		if err != nil {
+			r.debug("aws %q: no pgp public key could be found for %s: %v",
+				r.p.AccountName, shortdn, err)
+			hasPGPKey = false
 		}
 	}
 	return
@@ -414,6 +482,7 @@ func (r *run) resetIamUser(uid string) {
 		ulpo           *iam.UpdateLoginProfileOutput
 		clpo           *iam.CreateLoginProfileOutput
 		lako           *iam.ListAccessKeysOutput
+		dako           *iam.DeleteAccessKeyOutput
 		err            error
 	)
 
@@ -461,40 +530,47 @@ url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName
 			return
 		}
 	}
+	lako, err = r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
+		UserName: aws.String(uid),
+	})
+	if err != nil || lako == nil {
+		log.Printf("[error] aws %q: failed to list access keys for user %q: %v",
+			r.p.AccountName, uid, err)
+		return
+	}
+	// delete all access keys associated with the user
+	for _, key := range lako.AccessKeyMetadata {
+		daki := iam.DeleteAccessKeyInput{
+			AccessKeyId: key.AccessKeyId,
+			UserName:    aws.String(uid),
+		}
+		dako, err = r.cli.DeleteAccessKey(&daki)
+		if err != nil || dako == nil {
+			log.Printf("[error] aws %q: failed to delete access key %q of user %q: %v. request was %q.",
+				r.p.AccountName, *key.AccessKeyId, uid, err, daki.String())
+		} else {
+			r.debug("aws %q: deleted access key %q of user %q",
+				r.p.AccountName, *key.AccessKeyId, uid)
+		}
+	}
 	if r.p.CreateAccessKey {
-		lako, err = r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
+		cako, err = r.cli.CreateAccessKey(&iam.CreateAccessKeyInput{
 			UserName: aws.String(uid),
 		})
-		if err != nil || lako == nil {
-			log.Printf("[error] aws %q: failed to list access keys for user %q: %v",
+		if err != nil || cako == nil {
+			log.Printf("[error] aws %q: failed to create access key for user %q: %v",
 				r.p.AccountName, uid, err)
 			return
 		}
-		// only create an access key if user has fewer than
-		// hardcoded default # of access keys per user per
-		// http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
-		if len(lako.AccessKeyMetadata) > accessKeyLimit {
-			log.Printf("[warning] aws %q: %q already has max of %d access keys",
-				r.p.AccountName, uid, accessKeyLimit)
-		} else {
-			cako, err = r.cli.CreateAccessKey(&iam.CreateAccessKeyInput{
-				UserName: aws.String(uid),
-			})
-			if err != nil || cako == nil {
-				log.Printf("[error] aws %q: failed to create access key for user %q: %v",
-					r.p.AccountName, uid, err)
-				return
-			}
-			accesskey = fmt.Sprintf(`
+		accesskey = fmt.Sprintf(`
 	A new access key has been created for you.
 	Add the lines below to ~/.aws/credentials
 	[%s]
 	aws_access_key_id = %s
 	aws_secret_access_key = %s`,
-				r.p.AccountName,
-				*cako.AccessKey.AccessKeyId,
-				*cako.AccessKey.SecretAccessKey)
-		}
+			r.p.AccountName,
+			*cako.AccessKey.AccessKeyId,
+			*cako.AccessKey.SecretAccessKey)
 	}
 	// notify the user
 	r.notify(uid, strings.Join([]string{body, accesskey}, "\n"))

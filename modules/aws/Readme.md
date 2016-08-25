@@ -42,10 +42,26 @@ and add them into the `ldapmanaged` aws iam group. This allows `userplex`
 to later remove users from the `ldapmanaged` group that have been removed
 from ldap, and delete their aws account.
 
-Reset
+One-off command line flags
 -------------------
-AWS user accounts can be reset by passing their LDAP uid to the `-reset` `userplex` command line flag.
-The `reset` module configuration must be set to `true` for `-reset` to be active.
+The following one-off operations can be used to create/delete/reset individual users.
+Each operation supports multiple comma separated LDAP users, and all three operations, {reset,create,delete} can be specified on a single userplex run.
+
+Example:
+`userplex -reset foo,bar -create alpha,tango -delete spastis`
+
+One-off Reset
+-------------------
+AWS user accounts can be reset by passing their comma separated LDAP uids to the `-reset` `userplex` command line flag.
+Reset resets each user's password, removes their access keys, and creates a fresh access key (if `CreateAccessKey` is `true`).
+
+One-off Create
+-------------------
+AWS user accounts can be created by passing their comma separated LDAP uids to the `-create` `userplex` command line flag.
+
+One-off Delete
+-------------------
+AWS user accounts can be deleted by passing their comma separated LDAP uids to the `-delete` `userplex` command line flag.
 
 Access key creation
 -------------------
