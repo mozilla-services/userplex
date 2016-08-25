@@ -42,6 +42,11 @@ and add them into the `ldapmanaged` aws iam group. This allows `userplex`
 to later remove users from the `ldapmanaged` group that have been removed
 from ldap, and delete their aws account.
 
+Reset
+-------------------
+AWS user accounts can be reset by passing their LDAP uid to the `-reset` `userplex` command line flag.
+The `reset` module configuration must be set to `true` for `-reset` to be active.
+
 Access key creation
 -------------------
 This module can create an access key when a user is created. The access key will

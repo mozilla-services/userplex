@@ -62,7 +62,7 @@ var once = flag.Bool("once", false, "Run only once and exit, don't enter the cro
 var runmod = flag.String("module", "all", "Module to run. if 'all', run all available modules (default)")
 var showVersion = flag.Bool("V", false, "Show version and exit")
 var debug = flag.Bool("D", false, "Enable debug logging")
-var resetUsername = flag.String("reset", "", "Reset access key and password for a user")
+var resetUsername = flag.String("reset", "", "Reset access key and password for an LDAP user")
 
 func main() {
 	var (

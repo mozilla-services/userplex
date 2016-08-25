@@ -100,7 +100,7 @@ func (r *run) Run() (err error) {
 	}
 	// find which users are no longer in ldap and needs to be removed from aws
 	if r.Conf.Delete {
-		for uid, _ := range iamers {
+		for uid := range iamers {
 			if _, ok := ldapers[uid]; !ok {
 				r.debug("aws %q: %q found in IAM group but not in LDAP, needs deletion",
 					r.p.AccountName, uid)
@@ -110,7 +110,9 @@ func (r *run) Run() (err error) {
 		}
 	}
 	// reset access key and password for specified user
-	if r.Conf.Reset && r.Conf.ResetUsername != "" {
+	if !r.Conf.Reset && r.Conf.ResetUsername != "" {
+		log.Printf("[warning] aws %q: -reset flag processed for uid %s but reset is disabled in module config", r.p.AccountName, r.Conf.ResetUsername)
+	} else if r.Conf.Reset {
 		if _, ok := iamers[r.Conf.ResetUsername]; ok {
 			r.debug("aws %q: %q found, needs reset",
 				r.p.AccountName, r.Conf.ResetUsername)
@@ -196,18 +198,20 @@ func (r *run) createIamUser(uid string) {
 		cuo       *iam.CreateUserOutput
 		clpo      *iam.CreateLoginProfileOutput
 		cako      *iam.CreateAccessKeyOutput
+		err       error
 	)
 	password := "P" + randToken() + "%"
-	mail, err := r.Conf.LdapCli.GetUserEmailByUid(uid)
-	if err != nil {
-		log.Printf("[error] aws %q: couldn't find email of user %q in ldap, notification not sent: %v",
-			r.p.AccountName, uid, err)
-		return
-	}
+	body := fmt.Sprintf(`New AWS account:
+login: %s
+pass:  %s (change at first login)
+url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName)
+
 	if !r.Conf.ApplyChanges {
 		log.Printf("[dryrun] aws %q: would have created AWS IAM user %q with password %q",
 			r.p.AccountName, uid, password)
-		goto notify
+		// notify the user, do not apply
+		r.notify(uid, body)
+		return
 	}
 	cuo, err = r.cli.CreateUser(&iam.CreateUserInput{
 		UserName: aws.String(uid),
@@ -248,28 +252,8 @@ aws_secret_access_key = %s`,
 			*cako.AccessKey.AccessKeyId,
 			*cako.AccessKey.SecretAccessKey)
 	}
-
-notify:
-	// notify user
-	rcpt := r.Conf.Notify.Recipient
-	if rcpt == "{ldap:mail}" {
-		rcpt = mail
-	}
-
-	body := fmt.Sprintf(`New AWS account:
-login: %s
-pass:  %s (change at first login)
-url:   https://%s.signin.aws.amazon.com/console
-%s`, uid, password, r.p.AccountName, accesskey)
-
-	r.Conf.Notify.Channel <- modules.Notification{
-		Module:      "aws",
-		Recipient:   rcpt,
-		Mode:        r.Conf.Notify.Mode,
-		MustEncrypt: true,
-		Body:        []byte(body),
-	}
-	return
+	// notify the user
+	r.notify(uid, strings.Join([]string{body, accesskey}, "\n"))
 }
 
 func (r *run) updateUserGroups(uid string) (updated bool) {
@@ -323,10 +307,13 @@ func (r *run) removeIamUser(uid string) {
 		lgfu *iam.ListGroupsForUserOutput
 		dlpo *iam.DeleteLoginProfileOutput
 		duo  *iam.DeleteUserOutput
+		dako *iam.DeleteAccessKeyOutput
+		rufg *iam.RemoveUserFromGroupOutput
 	)
-	if !r.Conf.Delete {
-		return
-	}
+
+	body := fmt.Sprintf(`Deleted AWS account:
+The account %q has been removed from %q.`, uid, r.p.AccountName)
+
 	// remove all user's access keys
 	lakfu, err := r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
 		UserName: aws.String(uid),
@@ -343,12 +330,12 @@ func (r *run) removeIamUser(uid string) {
 				r.p.AccountName, keyid, uid)
 			continue
 		}
-		daki := &iam.DeleteAccessKeyInput{
+		daki := iam.DeleteAccessKeyInput{
 			AccessKeyId: accesskey.AccessKeyId,
 			UserName:    aws.String(uid),
 		}
-		resp, err := r.cli.DeleteAccessKey(daki)
-		if err != nil || resp == nil {
+		dako, err = r.cli.DeleteAccessKey(&daki)
+		if err != nil || dako == nil {
 			log.Printf("[error] aws %q: failed to delete access key %q of user %q: %v. request was %q.",
 				r.p.AccountName, keyid, uid, err, daki.String())
 		} else {
@@ -378,8 +365,8 @@ func (r *run) removeIamUser(uid string) {
 			GroupName: iamgroup.GroupName,
 			UserName:  aws.String(uid),
 		}
-		resp, err := r.cli.RemoveUserFromGroup(rufgi)
-		if err != nil || resp == nil {
+		rufg, err = r.cli.RemoveUserFromGroup(rufgi)
+		if err != nil || rufg == nil {
 			log.Printf("[error] aws %q: failed to remove user %q from group %q: %v. request was %q.",
 				r.p.AccountName, uid, gname, err, rufgi.String())
 		} else {
@@ -390,7 +377,9 @@ func (r *run) removeIamUser(uid string) {
 	if !r.Conf.ApplyChanges {
 		log.Printf("[dryrun] aws %q: would have deleted AWS IAM user %q",
 			r.p.AccountName, uid)
-		goto notify
+		// notify the user, do not apply
+		r.notify(uid, body)
+		return
 	}
 	dlpo, err = r.cli.DeleteLoginProfile(&iam.DeleteLoginProfileInput{
 		UserName: aws.String(uid),
@@ -406,29 +395,11 @@ func (r *run) removeIamUser(uid string) {
 		log.Printf("[error] aws %q: failed to delete aws user %q: %v",
 			r.p.AccountName, uid, err)
 		return
-	} else {
-		log.Printf("[info] aws %q: deleted user %q", r.p.AccountName, uid)
 	}
-notify:
-	// notify user
-	rcpt := r.Conf.Notify.Recipient
-	if rcpt == "{ldap:mail}" {
-		rcpt, err = r.Conf.LdapCli.GetUserEmailByUid(uid)
-		if err != nil {
-			log.Printf("[error] aws %q: couldn't find email of user %q in ldap, notification not sent: %v",
-				r.p.AccountName, uid, err)
-			return
-		}
-	}
-	r.Conf.Notify.Channel <- modules.Notification{
-		Module:      "aws",
-		Recipient:   rcpt,
-		Mode:        r.Conf.Notify.Mode,
-		MustEncrypt: false,
-		Body: []byte(fmt.Sprintf(`Deleted AWS account:
-The account %q has been removed from %q.`, uid, r.p.AccountName)),
-	}
-	return
+	log.Printf("[info] aws %q: deleted user %q", r.p.AccountName, uid)
+
+	// notify the user
+	r.notify(uid, body)
 }
 
 // reset the password for a user in aws
@@ -442,20 +413,22 @@ func (r *run) resetIamUser(uid string) {
 		glpo           *iam.GetLoginProfileOutput
 		ulpo           *iam.UpdateLoginProfileOutput
 		clpo           *iam.CreateLoginProfileOutput
-		laao           *iam.ListAccessKeysOutput
+		lako           *iam.ListAccessKeysOutput
+		err            error
 	)
 
 	password := "P" + randToken() + "%"
-	mail, err := r.Conf.LdapCli.GetUserEmailByUid(uid)
-	if err != nil {
-		log.Printf("[error] aws %q: couldn't find email of user %q in ldap, notification not sent: %v",
-			r.p.AccountName, uid, err)
-		return
-	}
+	body := fmt.Sprintf(`Updated AWS account:
+login: %s
+pass:  %s (change at first login)
+url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName)
+
 	if !r.Conf.ApplyChanges {
 		log.Printf("[dryrun] aws %q: would have reset AWS IAM user %q with password %q",
 			r.p.AccountName, uid, password)
-		goto notify
+		// notify the user, do not apply
+		r.notify(uid, body)
+		return
 	}
 	glpo, err = r.cli.GetLoginProfile(&iam.GetLoginProfileInput{
 		UserName: aws.String(uid),
@@ -489,10 +462,10 @@ func (r *run) resetIamUser(uid string) {
 		}
 	}
 	if r.p.CreateAccessKey {
-		laao, err = r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
+		lako, err = r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
 			UserName: aws.String(uid),
 		})
-		if err != nil || laao == nil {
+		if err != nil || lako == nil {
 			log.Printf("[error] aws %q: failed to list access keys for user %q: %v",
 				r.p.AccountName, uid, err)
 			return
@@ -500,7 +473,7 @@ func (r *run) resetIamUser(uid string) {
 		// only create an access key if user has fewer than
 		// hardcoded default # of access keys per user per
 		// http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-limits.html
-		if len(laao.AccessKeyMetadata) > accessKeyLimit {
+		if len(lako.AccessKeyMetadata) > accessKeyLimit {
 			log.Printf("[warning] aws %q: %q already has max of %d access keys",
 				r.p.AccountName, uid, accessKeyLimit)
 		} else {
@@ -523,19 +496,22 @@ func (r *run) resetIamUser(uid string) {
 				*cako.AccessKey.SecretAccessKey)
 		}
 	}
+	// notify the user
+	r.notify(uid, strings.Join([]string{body, accesskey}, "\n"))
+}
 
-notify:
+func (r *run) notify(uid, body string) {
 	// notify user
 	rcpt := r.Conf.Notify.Recipient
 	if rcpt == "{ldap:mail}" {
+		mail, err := r.Conf.LdapCli.GetUserEmailByUid(uid)
+		if err != nil {
+			log.Printf("[error] aws %q: couldn't find email of user %q in ldap, notification not sent: %v",
+				r.p.AccountName, uid, err)
+			return
+		}
 		rcpt = mail
 	}
-
-	body := fmt.Sprintf(`Updated AWS account:
-login: %s
-pass:  %s (change at first login)
-url:   https://%s.signin.aws.amazon.com/console
-%s`, uid, password, r.p.AccountName, accesskey)
 
 	r.Conf.Notify.Channel <- modules.Notification{
 		Module:      "aws",
@@ -544,7 +520,6 @@ url:   https://%s.signin.aws.amazon.com/console
 		MustEncrypt: true,
 		Body:        []byte(body),
 	}
-	return
 }
 
 func randToken() string {
