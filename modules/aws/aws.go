@@ -491,8 +491,6 @@ The account %q has been removed from %q.`, uid, r.p.AccountName)
 	if !r.Conf.ApplyChanges {
 		log.Printf("[dryrun] aws %q: would have deleted AWS IAM user %q",
 			r.p.AccountName, uid)
-		// notify the user, do not apply
-		r.notify(uid, body)
 		return
 	}
 	dlpo, err = r.cli.DeleteLoginProfile(&iam.DeleteLoginProfileInput{
@@ -511,9 +509,6 @@ The account %q has been removed from %q.`, uid, r.p.AccountName)
 		return
 	}
 	log.Printf("[info] aws %q: deleted user %q", r.p.AccountName, uid)
-
-	// notify the user
-	r.notify(uid, body)
 }
 
 // reset the password for a user in aws
