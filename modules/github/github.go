@@ -49,16 +49,16 @@ type credentials struct {
 	OAuthToken string `yaml:"oauthtoken"`
 }
 
-func (r *run) Run() error {
+func (r *run) Run() (err error) {
 	var resp *github.Response
 
-	err := r.Conf.GetParameters(&r.p)
+	err = r.Conf.GetParameters(&r.p)
 	if err != nil {
-		return err
+		return
 	}
 	err = r.Conf.GetCredentials(&r.c)
 	if err != nil {
-		return err
+		return
 	}
 
 	if r.p.UserplexTeamName == "" {
