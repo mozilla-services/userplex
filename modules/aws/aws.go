@@ -600,11 +600,11 @@ url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName
 			return
 		}
 		accesskey = fmt.Sprintf(`
-	A new access key has been created for you.
-	Add the lines below to ~/.aws/credentials
-	[%s]
-	aws_access_key_id = %s
-	aws_secret_access_key = %s`,
+A new access key has been created for you.
+Add the lines below to ~/.aws/credentials
+[%s]
+aws_access_key_id = %s
+aws_secret_access_key = %s`,
 			r.p.AccountName,
 			*cako.AccessKey.AccessKeyId,
 			*cako.AccessKey.SecretAccessKey)
