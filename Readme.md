@@ -92,6 +92,13 @@ modules:
             - ldap_managed
 ```
 
+### One-off Reset
+
+User accounts can be reset by passing their comma separated LDAP uids to the `-reset` `userplex` command line flag.
+
+Example one-off command specification:
+`userplex -reset foo,bar`
+
 ### UID Maps
 
 By default, `userplex` will create users based on their LDAP `uid` attribute. In
