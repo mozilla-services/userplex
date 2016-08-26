@@ -84,6 +84,7 @@ modules:
       create: true
       # delete aws users that are in the roles but no longer in ldap
       delete: true
+      reset: true
       parameters:
           # users will be added to the following IAM groups
           iamgroups:

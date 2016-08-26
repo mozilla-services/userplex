@@ -69,6 +69,7 @@ The base module configuration uses the following parameters:
 * `ldapgroups` is a list of ldap group DNs
 * `create` indicates whether user create is enabled
 * `delete` indicates whether user deletion is enabled
+* `reset` indicates whether user reset is enabled
 * `uidmap` is a mapping of UIDs as described in the next section
 * `credentials` contains module-specific credentials
 * `parameters` contains module-specific parameters
@@ -81,6 +82,7 @@ modules:
         - thedevelopers
       create: true
       delete: true
+      reset: true
       uidmap: *CUSTOMMAP1
       credentials:
           accesskey: AKIAbbbb
@@ -119,7 +121,7 @@ and `neo`, and then create the authorizedkeys files with the translated uids.
 ### Notifications
 
 Userplex provides a simple way for modules to send notifications to their users
-when accounts are created and deleted.
+when accounts are created, deleted, or reset.
 
 Modules only need to send a notification in a channel provided by the main
 userplex program, and don't need to know how to speak SMTP or other notification

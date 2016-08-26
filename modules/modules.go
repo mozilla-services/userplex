@@ -18,6 +18,10 @@ type Configuration struct {
 	UidMap       []umap         `yaml:"uidmap" json:"uidmap"`
 	Create       bool           `yaml:"create" json:"create"`
 	Delete       bool           `yaml:"delete" json:"delete"`
+	Reset        bool           `yaml:"reset" json:"reset"`
+	ResetUsers   string         `yaml:"resetusers" json:"resetusers"`
+	CreateUsers  string         `yaml:"createusers" json:"createusers"`
+	DeleteUsers  string         `yaml:"deleteusers" json:"deleteusers"`
 	Notify       NotifyConf     `yaml:"notify" json:"notify"`
 	Credentials  interface{}    `yaml:"credentials" json:"credentials"`
 	Parameters   interface{}    `yaml:"parameters" json:"parameters"`
