@@ -110,14 +110,21 @@ modules:
           apikey: 9775a026f1ca7d1c6c5af9d94d9595a4
           appkey: 87ce4a24youcouldntpossiblythinkthisisakey
 
-    - name: github
-      ldapgroups:
-        - developers
-      credentials:
-          oauthToken: 89141918thiscouldbeatoken
-      parameters:
-          organizations:
-            - name: someorg
-              teams:
-                - someteam
-                - someotherteam
+    -   name: github
+        ldapgroups:
+        -   developers
+        create: true
+        notify:
+            mode: smtp
+        uidmap:
+        -   ldapuid: foobar
+            localuid: foo
+        credentials:
+            oauthtoken: 1982398notrealtoken
+        parameters:
+            userplexteamname: userplexed
+            organizations:
+            -   name: my-org
+                teams:
+                -   userplexed
+                -   test-team
