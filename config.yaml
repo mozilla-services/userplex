@@ -116,6 +116,7 @@ modules:
         create: true
         notify:
             mode: smtp
+            recipient: '{ldap:mail}'
         uidmap:
         -   ldapuid: foobar
             localuid: foo
