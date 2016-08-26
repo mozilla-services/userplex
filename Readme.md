@@ -65,14 +65,20 @@ Each module is documented in its own modules/<modulename> directory.
 
 The base module configuration uses the following parameters:
 
-* `name` is a module name that must map to a module in `modules/<modulename>`
-* `ldapgroups` is a list of ldap group DNs
-* `create` indicates whether user create is enabled
-* `delete` indicates whether user deletion is enabled
-* `reset` indicates whether user reset is enabled
-* `uidmap` is a mapping of UIDs as described in the next section
-* `credentials` contains module-specific credentials
-* `parameters` contains module-specific parameters
+* `Name` is a module name that must map to a module in `modules/<modulename>`
+* `LdapGroups` is a list of ldap group DNs
+* `Create` indicates whether user create is enabled
+* `Delete` indicates whether user deletion is enabled
+* `Reset` indicates whether user reset is enabled
+* `ResetUsers` contains a comma separated list of users to reset
+* `UidMap` is a mapping of UIDs as described in the next section
+* `Credentials` contains module-specific credentials
+* `Parameters` contains module-specific parameters
+Notify
+* `ApplyChanges` indicates whether to apply changes or dryrun
+* `NotifyUsers` indicates whether notifications are enabled
+* `LdapCli` is a mozldap.Client
+* `Debug` indicates whether debug messages should be printed
 
 ```yaml
 modules:
@@ -91,6 +97,13 @@ modules:
           assignroles:
             - ldap_managed
 ```
+
+### One-off Reset
+
+User accounts can be reset by passing their comma separated LDAP uids to the `-reset` `userplex` command line flag.
+
+Example one-off command specification:
+`userplex -reset foo,bar`
 
 ### UID Maps
 

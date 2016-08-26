@@ -51,15 +51,6 @@ type credentials struct {
 	SecretKey string
 }
 
-type operation int
-
-const (
-	reset operation = iota
-	delete
-	create
-	none
-)
-
 func (r *run) Run() (err error) {
 	var (
 		countCreated,
@@ -81,11 +72,23 @@ func (r *run) Run() (err error) {
 		return fmt.Errorf("failed to connect to aws using access key %q", r.c.AccessKey)
 	}
 
-	if r.Conf.ResetUsers != "" || r.Conf.DeleteUsers != "" || r.Conf.CreateUsers != "" {
-		countCreated, countDeleted, countReset, err = r.runOneOffs()
+	if r.Conf.ResetUsers != "" {
+		resetUsers := strings.Split(strings.Trim(r.Conf.ResetUsers, ", "), ",")
+
+		// reset specified users
+		for _, user := range resetUsers {
+			var uid string
+			uid, _, err = r.getLdaperByUID(user)
+			if err != nil {
+				// logging happens in getLdaper
+				return
+			}
+			r.resetIamUser(uid)
+			countReset++
+		}
 		log.Printf("[info] aws %q: summary created=%d, deleted=%d, reset=%d",
 			r.p.AccountName, countCreated, countDeleted, countReset)
-		return err
+		return
 	}
 
 	// Retrieve a list of ldap users from the groups configured
@@ -133,96 +136,6 @@ func (r *run) Run() (err error) {
 	return
 }
 
-// Process only the users specified on the command line
-func (r *run) runOneOffs() (countCreated, countDeleted, countReset int, err error) {
-	var uid string
-	oneOffUserMap := make(map[string]operation)
-	// get users for each operation, set them in map
-	// if there are duplicate users across operations, error
-	resetUsers := strings.Split(strings.Trim(r.Conf.ResetUsers, ", "), ",")
-	createUsers := strings.Split(strings.Trim(r.Conf.CreateUsers, ", "), ",")
-	deleteUsers := strings.Split(strings.Trim(r.Conf.DeleteUsers, ", "), ",")
-
-	overlapError := fmt.Errorf(`Same user cannot be in -reset, -delete, and -create at the same time: -reset=%v -delete=%v -create=%v`,
-		resetUsers, deleteUsers, createUsers)
-
-	for _, user := range resetUsers {
-		if user == "" {
-			continue
-		}
-		oneOffUserMap[user] = reset
-	}
-	for _, user := range createUsers {
-		if user == "" {
-			continue
-		}
-		if _, ok := oneOffUserMap[user]; !ok {
-			oneOffUserMap[user] = create
-		} else {
-			err = overlapError
-			return
-		}
-	}
-	for _, user := range deleteUsers {
-		if user == "" {
-			continue
-		}
-		if _, ok := oneOffUserMap[user]; !ok {
-			oneOffUserMap[user] = delete
-		} else {
-			err = overlapError
-			return
-		}
-	}
-
-	// reset specified users
-	if r.Conf.ResetUsers != "" {
-		for user, op := range oneOffUserMap {
-			if op != reset {
-				continue
-			}
-			uid, _, err = r.getLdaperByUID(user)
-			if err != nil {
-				// logging happens in getLdaper
-				return
-			}
-			r.resetIamUser(uid)
-			countReset++
-		}
-	}
-	// delete specified users
-	if r.Conf.DeleteUsers != "" {
-		for user, op := range oneOffUserMap {
-			if op != delete {
-				continue
-			}
-			uid, _, err = r.getLdaperByUID(user)
-			if err != nil {
-				// logging happens in getLdaper
-				return
-			}
-			r.removeIamUser(uid)
-			countDeleted++
-		}
-	}
-	// create specified users
-	if r.Conf.CreateUsers != "" {
-		for user, op := range oneOffUserMap {
-			if op != create {
-				continue
-			}
-			uid, _, err = r.getLdaperByUID(user)
-			if err != nil {
-				// logging happens in getLdaper
-				return
-			}
-			r.createIamUser(uid)
-			countCreated++
-		}
-	}
-	return
-}
-
 func (r *run) getLdapers() (lgm map[string]bool) {
 	lgm = make(map[string]bool)
 	users, err := r.Conf.LdapCli.GetEnabledUsersInGroups(r.Conf.LdapGroups)
@@ -241,9 +154,9 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 	return
 }
 
-func (r *run) getLdaperByUID(ldapUserId string) (uid string, hasPGPKey bool, err error) {
+func (r *run) getLdaperByUID(ldapUserID string) (uid string, hasPGPKey bool, err error) {
 	var user string
-	user, err = r.Conf.LdapCli.GetUserDNById(ldapUserId)
+	user, err = r.Conf.LdapCli.GetUserDNById(ldapUserID)
 	shortdn := strings.Split(user, ",")[0]
 	if err != nil {
 		log.Printf("[error] aws %q: ldap query failed with error %v", r.p.AccountName, err)

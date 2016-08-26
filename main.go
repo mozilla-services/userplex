@@ -63,8 +63,6 @@ var runmod = flag.String("module", "all", "Module to run. if 'all', run all avai
 var showVersion = flag.Bool("V", false, "Show version and exit")
 var debug = flag.Bool("D", false, "Enable debug logging")
 var resetUsers = flag.String("reset", "", "Reset an LDAP user's userplexed accounts")
-var deleteUsers = flag.String("delete", "", "Delete an LDAP user's userplexed accounts")
-var createUsers = flag.String("create", "", "Create userplexed accounts for an LDAP user")
 
 func main() {
 	var (
@@ -176,9 +174,9 @@ func run(conf conf) {
 		conf.Modules[i].Notify.Channel = notifchan
 		conf.Modules[i].Debug = *debug
 		conf.Modules[i].ResetUsers = *resetUsers
-		conf.Modules[i].CreateUsers = *createUsers
-		conf.Modules[i].DeleteUsers = *deleteUsers
 	}
+
+	moduleHasRun := make(map[string]bool)
 
 	// run each module in the order it appears in the configuration
 	for _, modconf := range conf.Modules {
@@ -189,12 +187,20 @@ func run(conf conf) {
 			log.Printf("[warning] %s module not registered, skipping it", modconf.Name)
 			continue
 		}
+		// one-off reset uses the first module config, skips subsequent
+		if *resetUsers != "" {
+			if _, ok := moduleHasRun[modconf.Name]; ok {
+				log.Printf("[warning] SKIPPING duplicate module config %s! Reset uses only the FIRST configuration for a given module.", modconf.Name)
+				continue
+			}
+		}
 		log.Println("[info] invoking module", modconf.Name)
 		run := modules.Available[modconf.Name].NewRun(modconf)
 		err = run.Run()
 		if err != nil {
 			log.Printf("[error] %s module failed with error: %v", modconf.Name, err)
 		}
+		moduleHasRun[modconf.Name] = true
 	}
 	// Modules are done, close the notification channel to tell the goroutine
 	// that it can aggregate and send them, and wait for notifdone to come back
