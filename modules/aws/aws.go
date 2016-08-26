@@ -81,99 +81,11 @@ func (r *run) Run() (err error) {
 		return fmt.Errorf("failed to connect to aws using access key %q", r.c.AccessKey)
 	}
 
-	oneOffUserMap := make(map[string]operation)
-	if r.Conf.ResetUsers != "" ||
-		r.Conf.DeleteUsers != "" ||
-		r.Conf.CreateUsers != "" {
-
-		// get users for each operation, set them in map
-		// if there are duplicate users across operations, error
-		resetUsers := strings.Split(strings.Trim(r.Conf.ResetUsers, ", "), ",")
-		createUsers := strings.Split(strings.Trim(r.Conf.CreateUsers, ", "), ",")
-		deleteUsers := strings.Split(strings.Trim(r.Conf.DeleteUsers, ", "), ",")
-
-		overlapError := fmt.Errorf(`None of -reset, -delete, and -create cannot have the same users specified.
--reset=%v
--delete=%v
--create=%v`, resetUsers, deleteUsers, createUsers)
-
-		for _, user := range resetUsers {
-			if user == "" {
-				continue
-			}
-			oneOffUserMap[user] = reset
-		}
-		for _, user := range createUsers {
-			if user == "" {
-				continue
-			}
-			if _, ok := oneOffUserMap[user]; !ok {
-				oneOffUserMap[user] = create
-			} else {
-				return overlapError
-			}
-		}
-		for _, user := range deleteUsers {
-			if user == "" {
-				continue
-			}
-			if _, ok := oneOffUserMap[user]; !ok {
-				oneOffUserMap[user] = delete
-			} else {
-				return overlapError
-			}
-		}
-	}
-
-	// reset specified users
-	if r.Conf.ResetUsers != "" {
-		for user, op := range oneOffUserMap {
-			if op != reset {
-				continue
-			}
-			uid, _, err := r.getLdaperByUID(user)
-			if err != nil {
-				// logging happens in getLdaper
-				return err
-			}
-			r.resetIamUser(uid)
-			countReset++
-		}
-	}
-	// delete specified users
-	if r.Conf.DeleteUsers != "" {
-		for user, op := range oneOffUserMap {
-			if op != delete {
-				continue
-			}
-			uid, _, err := r.getLdaperByUID(user)
-			if err != nil {
-				// logging happens in getLdaper
-				return err
-			}
-			r.removeIamUser(uid)
-			countDeleted++
-		}
-	}
-	// create specified users
-	if r.Conf.CreateUsers != "" {
-		for user, op := range oneOffUserMap {
-			if op != create {
-				continue
-			}
-			uid, _, err := r.getLdaperByUID(user)
-			if err != nil {
-				// logging happens in getLdaper
-				return err
-			}
-			r.createIamUser(uid)
-			countCreated++
-		}
-	}
-
-	// exit if this was a one-off run
-	if r.Conf.CreateUsers != "" || r.Conf.DeleteUsers != "" || r.Conf.ResetUsers != "" {
-		return nil
+	if r.Conf.ResetUsers != "" || r.Conf.DeleteUsers != "" || r.Conf.CreateUsers != "" {
+		countCreated, countDeleted, countReset, err = r.runOneOffs()
+		log.Printf("[info] aws %q: summary created=%d, deleted=%d, reset=%d",
+			r.p.AccountName, countCreated, countDeleted, countReset)
+		return err
 	}
 
 	// Retrieve a list of ldap users from the groups configured
@@ -195,6 +107,7 @@ func (r *run) Run() (err error) {
 				}
 				r.createIamUser(uid)
 				countCreated++
+
 			} else {
 				if r.updateUserGroups(uid) {
 					countGroupUpdated++
@@ -217,6 +130,96 @@ func (r *run) Run() (err error) {
 	}
 	log.Printf("[info] aws %q: summary created=%d, group_updated=%d, deleted=%d, reset=%d",
 		r.p.AccountName, countCreated, countGroupUpdated, countDeleted, countReset)
+	return
+}
+
+// Process only the users specified on the command line
+func (r *run) runOneOffs() (countCreated, countDeleted, countReset int, err error) {
+	var uid string
+	oneOffUserMap := make(map[string]operation)
+	// get users for each operation, set them in map
+	// if there are duplicate users across operations, error
+	resetUsers := strings.Split(strings.Trim(r.Conf.ResetUsers, ", "), ",")
+	createUsers := strings.Split(strings.Trim(r.Conf.CreateUsers, ", "), ",")
+	deleteUsers := strings.Split(strings.Trim(r.Conf.DeleteUsers, ", "), ",")
+
+	overlapError := fmt.Errorf(`Same user cannot be in -reset, -delete, and -create at the same time: -reset=%v -delete=%v -create=%v`,
+		resetUsers, deleteUsers, createUsers)
+
+	for _, user := range resetUsers {
+		if user == "" {
+			continue
+		}
+		oneOffUserMap[user] = reset
+	}
+	for _, user := range createUsers {
+		if user == "" {
+			continue
+		}
+		if _, ok := oneOffUserMap[user]; !ok {
+			oneOffUserMap[user] = create
+		} else {
+			err = overlapError
+			return
+		}
+	}
+	for _, user := range deleteUsers {
+		if user == "" {
+			continue
+		}
+		if _, ok := oneOffUserMap[user]; !ok {
+			oneOffUserMap[user] = delete
+		} else {
+			err = overlapError
+			return
+		}
+	}
+
+	// reset specified users
+	if r.Conf.ResetUsers != "" {
+		for user, op := range oneOffUserMap {
+			if op != reset {
+				continue
+			}
+			uid, _, err = r.getLdaperByUID(user)
+			if err != nil {
+				// logging happens in getLdaper
+				return
+			}
+			r.resetIamUser(uid)
+			countReset++
+		}
+	}
+	// delete specified users
+	if r.Conf.DeleteUsers != "" {
+		for user, op := range oneOffUserMap {
+			if op != delete {
+				continue
+			}
+			uid, _, err = r.getLdaperByUID(user)
+			if err != nil {
+				// logging happens in getLdaper
+				return
+			}
+			r.removeIamUser(uid)
+			countDeleted++
+		}
+	}
+	// create specified users
+	if r.Conf.CreateUsers != "" {
+		for user, op := range oneOffUserMap {
+			if op != create {
+				continue
+			}
+			uid, _, err = r.getLdaperByUID(user)
+			if err != nil {
+				// logging happens in getLdaper
+				return
+			}
+			r.createIamUser(uid)
+			countCreated++
+		}
+	}
 	return
 }
 
