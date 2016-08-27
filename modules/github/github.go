@@ -29,10 +29,12 @@ func (m *module) NewRun(c modules.Configuration) modules.Runner {
 }
 
 type run struct {
-	Conf     modules.Configuration
-	p        parameters
-	c        credentials
-	ghclient *github.Client
+	Conf         modules.Configuration
+	p            parameters
+	c            credentials
+	ghclient     *github.Client
+	githubToLdap map[string]string
+	ldapToGithub map[string]string
 }
 
 type organization struct {
@@ -71,6 +73,7 @@ func (r *run) Run() (err error) {
 	tc := oauth2.NewClient(oauth2.NoContext, ts)
 	r.ghclient = github.NewClient(tc)
 
+	r.buildLdapMapping()
 	ldapers := r.getLdapers()
 
 	for _, org := range r.p.Organizations {
@@ -136,6 +139,15 @@ func (r *run) Run() (err error) {
 			}
 		}
 		for user := range membersMap {
+			var (
+				ldapUsername, ldapUsernameString string
+			)
+			user = strings.ToLower(user)
+			if _, ok := r.githubToLdap[user]; ok {
+				ldapUsername = r.githubToLdap[user]
+				ldapUsernameString = ldapUsername + " / "
+			}
+
 			var userTeams []string
 			// icky iterating over all these teams
 			for _, team := range teamsMap {
@@ -144,9 +156,9 @@ func (r *run) Run() (err error) {
 				}
 			}
 			// if the member is not in ldap and is in the userplex team
-			_, isUserplexed := teamMembersMap[r.p.UserplexTeamName][user]
-			if !membersMap[user] && isUserplexed {
-				log.Printf("[info] user %v is not in ldap groups %v but is a userplexed member of github organization %s and teams %v", user, r.Conf.LdapGroups, org.Name, userTeams)
+			// _, isUserplexed := teamMembersMap[r.p.UserplexTeamName][user]
+			if !membersMap[user] && ldapUsername == "" {
+				log.Printf("[info] user %s%s is not in ldap groups %s but is a member of github organization %s and teams %v", ldapUsernameString, user, r.Conf.LdapGroups, org.Name, userTeams)
 				if !r.Conf.ApplyChanges && r.Conf.Delete {
 					log.Printf("[dryrun] Userplex would have removed %s from GitHub organization %s", user, org.Name)
 				}
@@ -165,29 +177,13 @@ func (r *run) Run() (err error) {
 	return nil
 }
 
-func (r *run) notify(user string, body string) (err error) {
-	rcpt := r.Conf.Notify.Recipient
-	if rcpt == "{ldap:mail}" {
-		// reverse the uid map
-		for _, mapping := range r.Conf.UidMap {
-			if mapping.LocalUID == user {
-				user = mapping.LdapUid
-			}
-		}
-		rcpt, err = r.Conf.LdapCli.GetUserEmailByUid(user)
-		if err != nil {
-			log.Printf("[error] github: couldn't find email of user %q in ldap, notification not sent: %v", user, err)
-			return
-		}
+func (r *run) buildLdapMapping() {
+	r.githubToLdap = make(map[string]string)
+	r.ldapToGithub = make(map[string]string)
+	for _, mapping := range r.Conf.UidMap {
+		r.githubToLdap[mapping.LocalUID] = mapping.LdapUid
+		r.ldapToGithub[mapping.LdapUid] = mapping.LocalUID
 	}
-	r.Conf.Notify.Channel <- modules.Notification{
-		Module:      "github",
-		Recipient:   rcpt,
-		Mode:        r.Conf.Notify.Mode,
-		MustEncrypt: false,
-		Body:        []byte(body),
-	}
-	return
 }
 
 func (r *run) getOrgMembersMap(org organization) (membersMap map[string]bool) {
@@ -238,6 +234,28 @@ func (r *run) getOrgTeamsMap(org organization) (teamsMap map[string]*github.Team
 	return teamsMap
 }
 
+func (r *run) notify(user string, body string) (err error) {
+	rcpt := r.Conf.Notify.Recipient
+	if rcpt == "{ldap:mail}" {
+		if _, ok := r.githubToLdap[user]; ok {
+			user = r.githubToLdap[user]
+		}
+		rcpt, err = r.Conf.LdapCli.GetUserEmailByUid(user)
+		if err != nil {
+			log.Printf("[error] github: couldn't find email of user %q in ldap, notification not sent: %v", user, err)
+			return
+		}
+	}
+	r.Conf.Notify.Channel <- modules.Notification{
+		Module:      "github",
+		Recipient:   rcpt,
+		Mode:        r.Conf.Notify.Mode,
+		MustEncrypt: false,
+		Body:        []byte(body),
+	}
+	return
+}
+
 func (r *run) getLdapers() (lgm map[string]bool) {
 	lgm = make(map[string]bool)
 	users, err := r.Conf.LdapCli.GetEnabledUsersInGroups(r.Conf.LdapGroups)
@@ -251,12 +269,11 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 			log.Printf("[error] github: ldap query failed with error %v", err)
 			continue
 		}
-		// apply the uid map: only store the translated uid in the ldapuid
-		for _, mapping := range r.Conf.UidMap {
-			if mapping.LdapUid == uid {
-				uid = mapping.LocalUID
-			}
+
+		if _, ok := r.ldapToGithub[uid]; ok {
+			uid = r.ldapToGithub[uid]
 		}
+
 		lgm[uid] = false
 	}
 	return
