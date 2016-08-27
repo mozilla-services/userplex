@@ -13,7 +13,6 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"time"
@@ -26,34 +25,7 @@ import (
 
 	"github.com/gorhill/cronexpr"
 	"go.mozilla.org/mozldap"
-	"gopkg.in/yaml.v2"
 )
-
-type conf struct {
-	Cron string
-	Ldap struct {
-		URI, Username, Password string
-		TLSCert, TLSKey, CACert string
-		Insecure, Starttls      bool
-		cli                     mozldap.Client `yaml:"-",json:"-"`
-	}
-	Notifications struct {
-		Email struct {
-			Host, From, Cc,
-			ReplyTo, Subject string
-			Port int
-			Auth struct {
-				User, Pass string
-			}
-		}
-	}
-	UIDMap []struct {
-		LdapUID  string
-		LocalUID string
-	}
-
-	Modules []modules.Configuration
-}
 
 var config = flag.String("c", "", "Load configuration from file. Use stdin if omitted.")
 var applyChanges = flag.Bool("applyChanges", false, "By default, Userplex runs in dry mode. Set this flag to apply changes.")
@@ -65,10 +37,7 @@ var debug = flag.Bool("D", false, "Enable debug logging")
 var resetUsers = flag.String("reset", "", "Reset an LDAP user's userplexed accounts")
 
 func main() {
-	var (
-		err  error
-		conf conf
-	)
+	var err error
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s - Manage users in various SaaS based on a LDAP source\n"+
 			"Usage: %s -c config.yaml\n",
@@ -83,18 +52,9 @@ func main() {
 	}
 
 	// load the local configuration file
-	var data []byte
-	if *config == "" {
-		data, err = ioutil.ReadAll(os.Stdin)
-	} else {
-		data, err = ioutil.ReadFile(*config)
-	}
+	conf, err := loadConf(*config)
 	if err != nil {
-		log.Fatal(err)
-	}
-	err = yaml.Unmarshal(data, &conf)
-	if err != nil {
-		log.Fatalf("error: %v", err)
+		log.Fatalf("failed to load configuration: %v", err)
 	}
 
 	// just run once
