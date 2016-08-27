@@ -29,10 +29,12 @@ func (m *module) NewRun(c modules.Configuration) modules.Runner {
 }
 
 type run struct {
-	Conf     modules.Configuration
-	p        parameters
-	c        credentials
-	ghclient *github.Client
+	Conf         modules.Configuration
+	p            parameters
+	c            credentials
+	ghclient     *github.Client
+	githubToLdap map[string]string
+	ldapToGithub map[string]string
 }
 
 type organization struct {
@@ -71,16 +73,18 @@ func (r *run) Run() (err error) {
 	tc := oauth2.NewClient(oauth2.NoContext, ts)
 	r.ghclient = github.NewClient(tc)
 
+	r.buildLdapMapping()
 	ldapers := r.getLdapers()
 
 	for _, org := range r.p.Organizations {
 		// get all members for the organization
 		// name -> bool
-		membersMap := r.getOrgMembersMap(org)
+		membersMap := r.getOrgMembersMap(org, "all")
 
 		// get all teams for the organization
 		// name -> team
 		teamsMap := r.getOrgTeamsMap(org)
+		log.Printf("[info] github: found %d teams for organization %s", len(teamsMap), org.Name)
 
 		if _, ok := teamsMap[r.p.UserplexTeamName]; !ok {
 			log.Printf("[error] github: could not find UserplexTeam \"%s\" for organization %s", r.p.UserplexTeamName, org.Name)
@@ -91,6 +95,19 @@ func (r *run) Run() (err error) {
 		for _, team := range teamsMap {
 			teamMembersMap[*team.Name] = make(map[string]bool)
 			teamMembersMap[*team.Name] = r.getTeamMembersMap(team)
+		}
+
+		no2fa := r.getOrgMembersMap(org, "2fa_disabled")
+		log.Printf("[info] github: organization %s has %d total members and %d with 2fa disabled. %.2f%% have 2fa enabled.",
+			org.Name, len(membersMap), len(no2fa), 100-100*float64(len(no2fa))/float64(len(membersMap)))
+		var ldapUsername, ldapUsernameString string
+		for member := range no2fa {
+			member = strings.ToLower(member)
+			if _, ok := r.githubToLdap[member]; ok {
+				ldapUsernameString = ldapUsername + " / "
+			}
+			ldapUsername = r.githubToLdap[member]
+			log.Printf("[info] github: user %s%s in organization %s has 2fa disabled", ldapUsername, member, org.Name)
 		}
 
 		userplexedUsers := teamMembersMap[r.p.UserplexTeamName]
@@ -130,33 +147,42 @@ func (r *run) Run() (err error) {
 				}
 			}
 			if !r.Conf.ApplyChanges && r.Conf.Create {
-				log.Printf("[dryrun] Userplex would have added %s to GitHub organization %s and teams %v", user, org.Name, org.Teams)
+				log.Printf("[dryrun] github: would have added %s to GitHub organization %s and teams %v", user, org.Name, org.Teams)
 			} else if r.Conf.Create {
 				r.notify(user, fmt.Sprintf("Userplex added %s to GitHub organization %s and teams %v", user, org.Name, org.Teams))
 			}
 		}
-		for user := range membersMap {
+
+		for member := range membersMap {
+			ldapUsername = ""
+			ldapUsernameString = ""
+			member = strings.ToLower(member)
+			if _, ok := r.githubToLdap[member]; ok {
+				ldapUsername = r.githubToLdap[member]
+				ldapUsernameString = ldapUsername + " / "
+			}
+
 			var userTeams []string
 			// icky iterating over all these teams
 			for _, team := range teamsMap {
-				if _, ok := teamMembersMap[*team.Name][user]; ok {
+				if _, ok := teamMembersMap[*team.Name][member]; ok {
 					userTeams = append(userTeams, *team.Name)
 				}
 			}
 			// if the member is not in ldap and is in the userplex team
-			_, isUserplexed := teamMembersMap[r.p.UserplexTeamName][user]
-			if !membersMap[user] && isUserplexed {
-				log.Printf("[info] user %v is not in ldap groups %v but is a userplexed member of github organization %s and teams %v", user, r.Conf.LdapGroups, org.Name, userTeams)
+			// _, isUserplexed := teamMembersMap[r.p.UserplexTeamName][member]
+			if !membersMap[member] {
+				log.Printf("[info] user %s%s is not in ldap groups %s but is a member of github organization %s and teams %v", ldapUsernameString, member, r.Conf.LdapGroups, org.Name, userTeams)
 				if !r.Conf.ApplyChanges && r.Conf.Delete {
-					log.Printf("[dryrun] Userplex would have removed %s from GitHub organization %s", user, org.Name)
+					log.Printf("[dryrun] Userplex would have removed %s from GitHub organization %s", member, org.Name)
 				}
 				if r.Conf.ApplyChanges && r.Conf.Delete && 1 == 0 {
-					resp, err = r.ghclient.Organizations.RemoveOrgMembership(org.Name, user)
+					resp, err = r.ghclient.Organizations.RemoveOrgMembership(org.Name, member)
 					if err != nil || resp.StatusCode != 200 {
-						log.Printf("[error] github: could not remove user %s from %s, error: %v with status %s", user, org.Name, err, resp.Status)
+						log.Printf("[error] github: could not remove user %s from %s, error: %v with status %s", member, org.Name, err, resp.Status)
 						continue
 					}
-					r.notify(user, fmt.Sprintf("Userplex removed %s to GitHub organization %s", user, org.Name))
+					r.notify(member, fmt.Sprintf("Userplex removed %s to GitHub organization %s", member, org.Name))
 				}
 			}
 		}
@@ -165,14 +191,87 @@ func (r *run) Run() (err error) {
 	return nil
 }
 
+func (r *run) buildLdapMapping() {
+	r.githubToLdap = make(map[string]string)
+	r.ldapToGithub = make(map[string]string)
+	for _, mapping := range r.Conf.UidMap {
+		r.githubToLdap[mapping.LocalUID] = mapping.LdapUid
+		r.ldapToGithub[mapping.LdapUid] = mapping.LocalUID
+	}
+}
+
+func (r *run) getOrgMembersMap(org organization, filter string) (membersMap map[string]bool) {
+	membersMap = make(map[string]bool)
+	opt := &github.ListMembersOptions{
+		Filter:      filter,
+		ListOptions: github.ListOptions{PerPage: 100},
+	}
+	for {
+		members, resp, err := r.ghclient.Organizations.ListMembers(org.Name, opt)
+		if err != nil || resp.StatusCode != 200 {
+			log.Printf("[error] github: could not list members for organization %s, error: %v with status %s", org, err, resp.Status)
+			return
+		}
+		for _, member := range members {
+			membersMap[*member.Login] = false
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opt.ListOptions.Page = resp.NextPage
+	}
+	return membersMap
+}
+
+func (r *run) getTeamMembersMap(team *github.Team) (membersMap map[string]bool) {
+	membersMap = make(map[string]bool)
+	opt := &github.OrganizationListTeamMembersOptions{
+		ListOptions: github.ListOptions{
+			PerPage: 100,
+		},
+	}
+	for {
+		members, resp, err := r.ghclient.Organizations.ListTeamMembers(*team.ID, opt)
+		if err != nil || resp.StatusCode != 200 {
+			log.Printf("[error] github: could not list members for organization %s, error: %v with status %s", team, err, resp.Status)
+		}
+		for _, member := range members {
+			membersMap[*member.Login] = false
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opt.ListOptions.Page = resp.NextPage
+	}
+	return membersMap
+}
+
+func (r *run) getOrgTeamsMap(org organization) (teamsMap map[string]*github.Team) {
+	teamsMap = make(map[string]*github.Team)
+	opt := &github.ListOptions{
+		PerPage: 100,
+	}
+	for {
+		teams, resp, err := r.ghclient.Organizations.ListTeams(org.Name, opt)
+		if err != nil || resp.StatusCode != 200 {
+			log.Printf("[error] github: could not list teams for organization %s, error: %v", org.Name, err)
+		}
+		for _, team := range teams {
+			teamsMap[*team.Name] = team
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opt.Page = resp.NextPage
+	}
+	return teamsMap
+}
+
 func (r *run) notify(user string, body string) (err error) {
 	rcpt := r.Conf.Notify.Recipient
 	if rcpt == "{ldap:mail}" {
-		// reverse the uid map
-		for _, mapping := range r.Conf.UidMap {
-			if mapping.LocalUID == user {
-				user = mapping.LdapUid
-			}
+		if _, ok := r.githubToLdap[user]; ok {
+			user = r.githubToLdap[user]
 		}
 		rcpt, err = r.Conf.LdapCli.GetUserEmailByUid(user)
 		if err != nil {
@@ -190,54 +289,6 @@ func (r *run) notify(user string, body string) (err error) {
 	return
 }
 
-func (r *run) getOrgMembersMap(org organization) (membersMap map[string]bool) {
-	membersMap = make(map[string]bool)
-	members, resp, err := r.ghclient.Organizations.ListMembers(org.Name, &github.ListMembersOptions{
-		ListOptions: github.ListOptions{
-			PerPage: 500,
-		},
-	})
-	if err != nil || resp.StatusCode != 200 {
-		log.Printf("[error] github: could not list members for organization %s, error: %v with status %s", org, err, resp.Status)
-		return
-	}
-	for _, member := range members {
-		membersMap[*member.Login] = false
-	}
-	return membersMap
-}
-
-func (r *run) getTeamMembersMap(team *github.Team) (membersMap map[string]bool) {
-	membersMap = make(map[string]bool)
-	members, resp, err := r.ghclient.Organizations.ListTeamMembers(*team.ID, &github.OrganizationListTeamMembersOptions{
-		ListOptions: github.ListOptions{
-			PerPage: 500,
-		},
-	})
-	if err != nil || resp.StatusCode != 200 {
-		log.Printf("[error] github: could not list members for organization %s, error: %v with status %s", team, err, resp.Status)
-	}
-	for _, member := range members {
-		membersMap[*member.Login] = false
-	}
-	return membersMap
-}
-
-func (r *run) getOrgTeamsMap(org organization) (teamsMap map[string]*github.Team) {
-	teamsMap = make(map[string]*github.Team)
-	teams, resp, err := r.ghclient.Organizations.ListTeams(org.Name, &github.ListOptions{
-		PerPage: 500,
-	})
-	if err != nil || resp.StatusCode != 200 {
-		log.Printf("[error] github: could not list teams for organization %s, error: %v", org.Name, err)
-	}
-	for _, team := range teams {
-		teamsMap[*team.Name] = team
-	}
-	log.Printf("[info] github: found %d teams for organization %s", len(teams), org.Name)
-	return teamsMap
-}
-
 func (r *run) getLdapers() (lgm map[string]bool) {
 	lgm = make(map[string]bool)
 	users, err := r.Conf.LdapCli.GetEnabledUsersInGroups(r.Conf.LdapGroups)
@@ -251,12 +302,11 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 			log.Printf("[error] github: ldap query failed with error %v", err)
 			continue
 		}
-		// apply the uid map: only store the translated uid in the ldapuid
-		for _, mapping := range r.Conf.UidMap {
-			if mapping.LdapUid == uid {
-				uid = mapping.LocalUID
-			}
+
+		if _, ok := r.ldapToGithub[uid]; ok {
+			uid = r.ldapToGithub[uid]
 		}
+
 		lgm[uid] = false
 	}
 	return
