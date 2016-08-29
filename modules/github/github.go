@@ -155,6 +155,7 @@ func (r *run) Run() (err error) {
 
 		for member := range membersMap {
 			ldapUsername = ""
+			ldapUsernameString = ""
 			member = strings.ToLower(member)
 			if _, ok := r.githubToLdap[member]; ok {
 				ldapUsername = r.githubToLdap[member]
