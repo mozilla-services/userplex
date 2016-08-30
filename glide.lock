@@ -1,0 +1,92 @@
+hash: ad0b70cdf4314430937a2fb7aa4a85c1427ec8181315fccbadaf6931893731c7
+updated: 2016-08-30T12:18:03.227450344-07:00
+imports:
+- name: github.com/autrilla/yaml
+  version: 8ac3c7b2b592354bed79f33de3e3c83e573b9129
+- name: github.com/aws/aws-sdk-go
+  version: 41d27747f314ab5d608a470e23f1d92bd5249b0c
+  subpackages:
+  - aws
+  - aws/awserr
+  - aws/awsutil
+  - aws/client
+  - aws/client/metadata
+  - aws/corehandlers
+  - aws/credentials
+  - aws/credentials/ec2rolecreds
+  - aws/credentials/endpointcreds
+  - aws/credentials/stscreds
+  - aws/defaults
+  - aws/ec2metadata
+  - aws/request
+  - aws/session
+  - aws/signer/v4
+  - private/endpoints
+  - private/protocol
+  - private/protocol/json/jsonutil
+  - private/protocol/jsonrpc
+  - private/protocol/query
+  - private/protocol/query/queryutil
+  - private/protocol/rest
+  - private/protocol/xml/xmlutil
+  - private/waiter
+  - service/iam
+  - service/kms
+  - service/kms/kmsiface
+  - service/sts
+- name: github.com/cenkalti/backoff
+  version: cdf48bbc1eb78d1349cbda326a4a037f7ba565c6
+- name: github.com/davecgh/go-spew
+  version: 6cf5744a041a0022271cefed95ba843f6d87fd51
+  subpackages:
+  - spew
+- name: github.com/go-ini/ini
+  version: 9144852efba7c4daf409943ee90767da62d55438
+- name: github.com/gorhill/cronexpr
+  version: a557574d6c024ed6e36acc8b610f5f211c91568a
+- name: github.com/howeyc/gopass
+  version: b63a7d07e65df376d14e2d72907a93d4847dffe4
+- name: github.com/jmespath/go-jmespath
+  version: bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d
+- name: github.com/pmezard/go-difflib
+  version: 792786c7400a136282c1664665ae0a8db921c6c2
+  subpackages:
+  - difflib
+- name: github.com/stretchr/objx
+  version: 1a9d0bb9f541897e62256577b352fdbc1fb4fd94
+- name: github.com/stretchr/testify
+  version: d77da356e56a7428ad25149ca77381849a6a5232
+  subpackages:
+  - assert
+  - mock
+- name: github.com/zorkian/go-datadog-api
+  version: 36cc2c5c53025eb0c6076868eecaa8c5b697ddcb
+- name: go.mozilla.org/gopgagent
+  version: da4f24003cbec8ef26fdd0761e40eab273a02832
+- name: go.mozilla.org/mozldap
+  version: c029f2c4e75de2e472f7f8dbc8483e009e3ac509
+- name: go.mozilla.org/sops
+  version: 213242c7e7091dff2873b2ac664c7e32cf0ed8f5
+  subpackages:
+  - aes
+  - kms
+  - pgp
+  - yaml
+- name: golang.org/x/crypto
+  version: e0d166c33c321d0ff863f459a5882096e334f508
+  subpackages:
+  - cast5
+  - openpgp
+  - openpgp/armor
+  - openpgp/elgamal
+  - openpgp/errors
+  - openpgp/packet
+  - openpgp/s2k
+  - ssh/terminal
+- name: gopkg.in/asn1-ber.v1
+  version: 4e86f4367175e39f69d9358a5f17b4dda270378d
+- name: gopkg.in/ldap.v2
+  version: d0a5ced67b4dc310b9158d63a2c6f9c5ec13f105
+- name: gopkg.in/yaml.v2
+  version: e4d366fc3c7938e2958e662b4258c7a89e1f0e3e
+testImports: []

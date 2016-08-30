@@ -354,15 +354,15 @@ func (u *uploader) upload() (*UploadOutput, error) {
 	}
 
 	// Do one read to determine if we have more than one part
-	reader, _, err := u.nextReader()
-	if err == io.EOF { // single part
-		return u.singlePart(reader)
+	buf, err := u.nextReader()
+	if err == io.EOF || err == io.ErrUnexpectedEOF { // single part
+		return u.singlePart(buf)
 	} else if err != nil {
 		return nil, awserr.New("ReadRequestBody", "read upload data failed", err)
 	}
 
 	mu := multiuploader{uploader: u}
-	return mu.upload(reader)
+	return mu.upload(buf)
 }
 
 // init will initialize all default options.
@@ -408,7 +408,7 @@ func (u *uploader) initSize() {
 // This operation increases the shared u.readerPos counter, but note that it
 // does not need to be wrapped in a mutex because nextReader is only called
 // from the main thread.
-func (u *uploader) nextReader() (io.ReadSeeker, int, error) {
+func (u *uploader) nextReader() (io.ReadSeeker, error) {
 	switch r := u.in.Body.(type) {
 	case io.ReaderAt:
 		var err error
@@ -417,34 +417,27 @@ func (u *uploader) nextReader() (io.ReadSeeker, int, error) {
 		if u.totalSize >= 0 {
 			bytesLeft := u.totalSize - u.readerPos
 
-			if bytesLeft <= u.ctx.PartSize {
+			if bytesLeft == 0 {
 				err = io.EOF
+				n = bytesLeft
+			} else if bytesLeft <= u.ctx.PartSize {
+				err = io.ErrUnexpectedEOF
 				n = bytesLeft
 			}
 		}
 
-		reader := io.NewSectionReader(r, u.readerPos, n)
+		buf := io.NewSectionReader(r, u.readerPos, n)
 		u.readerPos += n
 
-		return reader, int(n), err
+		return buf, err
 
 	default:
-		part := make([]byte, u.ctx.PartSize)
-		n, err := readFillBuf(r, part)
+		packet := make([]byte, u.ctx.PartSize)
+		n, err := io.ReadFull(u.in.Body, packet)
 		u.readerPos += int64(n)
 
-		return bytes.NewReader(part[0:n]), n, err
+		return bytes.NewReader(packet[0:n]), err
 	}
-}
-
-func readFillBuf(r io.Reader, b []byte) (offset int, err error) {
-	for offset < len(b) && err == nil {
-		var n int
-		n, err = r.Read(b[offset:])
-		offset += n
-	}
-
-	return offset, err
 }
 
 // singlePart contains upload logic for uploading a single chunk via
@@ -518,8 +511,7 @@ func (u *multiuploader) upload(firstBuf io.ReadSeeker) (*UploadOutput, error) {
 	ch <- chunk{buf: firstBuf, num: num}
 
 	// Read and queue the rest of the parts
-	var err error
-	for u.geterr() == nil && err == nil {
+	for u.geterr() == nil {
 		num++
 		// This upload exceeded maximum number of supported parts, error now.
 		if num > int64(u.ctx.MaxUploadParts) || num > int64(MaxUploadParts) {
@@ -535,26 +527,22 @@ func (u *multiuploader) upload(firstBuf io.ReadSeeker) (*UploadOutput, error) {
 			break
 		}
 
-		var reader io.ReadSeeker
-		var nextChunkLen int
-		reader, nextChunkLen, err = u.nextReader()
+		buf, err := u.nextReader()
+		if err == io.EOF {
+			break
+		}
 
-		if err != nil && err != io.EOF {
+		ch <- chunk{buf: buf, num: num}
+
+		if err == io.ErrUnexpectedEOF {
+			break
+		} else if err != nil {
 			u.seterr(awserr.New(
 				"ReadRequestBody",
 				"read multipart upload data failed",
 				err))
 			break
 		}
-
-		if nextChunkLen == 0 {
-			// No need to upload empty part, if file was empty to start
-			// with empty single part would of been created and never
-			// started multipart upload.
-			break
-		}
-
-		ch <- chunk{buf: reader, num: num}
 	}
 
 	// Close the channel, wait for workers, and complete upload
