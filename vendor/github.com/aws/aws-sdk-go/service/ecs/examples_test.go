@@ -64,6 +64,7 @@ func ExampleECS_CreateService() {
 				ContainerName:    aws.String("String"),
 				ContainerPort:    aws.Int64(1),
 				LoadBalancerName: aws.String("String"),
+				TargetGroupArn:   aws.String("String"),
 			},
 			// More values...
 		},
@@ -640,7 +641,8 @@ func ExampleECS_RegisterTaskDefinition() {
 						// More values...
 					},
 				},
-				Memory: aws.Int64(1),
+				Memory:            aws.Int64(1),
+				MemoryReservation: aws.Int64(1),
 				MountPoints: []*ecs.MountPoint{
 					{ // Required
 						ContainerPath: aws.String("String"),
@@ -681,6 +683,7 @@ func ExampleECS_RegisterTaskDefinition() {
 			// More values...
 		},
 		Family:      aws.String("String"), // Required
+		NetworkMode: aws.String("NetworkMode"),
 		TaskRoleArn: aws.String("String"),
 		Volumes: []*ecs.Volume{
 			{ // Required

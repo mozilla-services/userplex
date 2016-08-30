@@ -296,6 +296,39 @@ func (cli *Client) GetUserDNById(uid string) (dn string, err error) {
 	return
 }
 
+// GetUserUidNumber returns the UID number of a user using a shortdn
+//
+// example: cli.GetUserUidNumber("mail=jvehent@mozilla.com")
+func (cli *Client) GetUserUidNumber(shortdn string) (uidNumber uint64, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			err = fmt.Errorf("mozldap.GetUserUidNumber(shortdn=%q) -> %v",
+				shortdn, e)
+		}
+	}()
+	entries, err := cli.Search("", "("+shortdn+")", []string{"uidNumber"})
+	if err != nil {
+		panic(err)
+	}
+	for _, entry := range entries {
+		for _, attr := range entry.Attributes {
+			if attr.Name != "uidNumber" {
+				continue
+			}
+			for _, val := range attr.Values {
+				uidNumber, err = strconv.ParseUint(val, 10, 64)
+				if err != nil {
+					panic(err)
+				}
+			}
+		}
+	}
+	if uidNumber < 0 {
+		err = fmt.Errorf("no uidNumber found in the attributes of user '%s'", shortdn)
+	}
+	return
+}
+
 // GetUserSSHPublicKeys returns a list of public keys defined in a user's sshPublicKey
 // LDAP attribute. If no public key is found, the list is empty.
 //
