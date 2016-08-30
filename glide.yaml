@@ -8,6 +8,7 @@ import:
   - aws/credentials
   - aws/session
   - service/iam
+- package: github.com/google/go-github/github
 - package: github.com/gorhill/cronexpr
   version: ^1.0.0
 - package: github.com/zorkian/go-datadog-api
@@ -16,6 +17,7 @@ import:
   subpackages:
   - aes
   - yaml
+- package: golang.org/x/oauth2
 - package: golang.org/x/crypto
   subpackages:
   - openpgp

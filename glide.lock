@@ -1,5 +1,5 @@
-hash: ad0b70cdf4314430937a2fb7aa4a85c1427ec8181315fccbadaf6931893731c7
-updated: 2016-08-30T12:18:03.227450344-07:00
+hash: fd15e9bf7af8ec3b1c45459fa9c0f1af073e7d8a2d21442f349b4c2d1b3d988b
+updated: 2016-08-30T15:18:18.684498474-07:00
 imports:
 - name: github.com/autrilla/yaml
   version: 8ac3c7b2b592354bed79f33de3e3c83e573b9129
@@ -42,6 +42,18 @@ imports:
   - spew
 - name: github.com/go-ini/ini
   version: 9144852efba7c4daf409943ee90767da62d55438
+- name: github.com/golang/protobuf
+  version: 888eb0692c857ec880338addf316bd662d5e630e
+  subpackages:
+  - proto
+- name: github.com/google/go-github
+  version: a59a35745f99ad92d70d69a9f180767063aa4bf3
+  subpackages:
+  - github
+- name: github.com/google/go-querystring
+  version: 9235644dd9e52eeae6fa48efd539fdc351a0af53
+  subpackages:
+  - query
 - name: github.com/gorhill/cronexpr
   version: a557574d6c024ed6e36acc8b610f5f211c91568a
 - name: github.com/howeyc/gopass
@@ -83,6 +95,14 @@ imports:
   - openpgp/packet
   - openpgp/s2k
   - ssh/terminal
+- name: golang.org/x/net
+  version: 6250b412798208e6c90b03b7c4f226de5aa299e2
+  subpackages:
+  - context
+- name: golang.org/x/oauth2
+  version: 4d549c893be7d4011bab739cc585d091a7188d27
+  subpackages:
+  - internal
 - name: gopkg.in/asn1-ber.v1
   version: 4e86f4367175e39f69d9358a5f17b4dda270378d
 - name: gopkg.in/ldap.v2
