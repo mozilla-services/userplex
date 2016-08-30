@@ -22,6 +22,8 @@ To download and install userplex into `$GOPATH/bin/userplex`, run this command:
 $ go get go.mozilla.org/userplex
 ```
 
+(Optional) Install [Glide](https://glide.sh/) for dependency management. All dependencies for userplex should be versioned in the `vendor` directory, and any new dependencies must be accounted for via glide. `glide update` to update dependencies, `glide install` to install.
+
 ## Configuration
 
 ### Ldap
