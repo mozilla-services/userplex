@@ -45,6 +45,7 @@ type organization struct {
 type parameters struct {
 	Organizations    []organization
 	UserplexTeamName string
+	Enforce2FA       bool
 }
 
 type credentials struct {
@@ -80,16 +81,12 @@ func (r *run) Run() (err error) {
 		// get all members for the organization
 		// name -> bool
 		membersMap := r.getOrgMembersMap(org, "all")
+		log.Printf("[info] github: found %d users for organization %s", len(membersMap), org.Name)
 
 		// get all teams for the organization
 		// name -> team
 		teamsMap := r.getOrgTeamsMap(org)
 		log.Printf("[info] github: found %d teams for organization %s", len(teamsMap), org.Name)
-
-		if _, ok := teamsMap[r.p.UserplexTeamName]; !ok {
-			log.Printf("[error] github: could not find UserplexTeam \"%s\" for organization %s", r.p.UserplexTeamName, org.Name)
-			continue
-		}
 
 		teamMembersMap := make(map[string]map[string]bool)
 		for _, team := range teamsMap {
@@ -97,20 +94,19 @@ func (r *run) Run() (err error) {
 			teamMembersMap[*team.Name] = r.getTeamMembersMap(team)
 		}
 
-		no2fa := r.getOrgMembersMap(org, "2fa_disabled")
-		log.Printf("[info] github: organization %s has %d total members and %d with 2fa disabled. %.2f%% have 2fa enabled.",
-			org.Name, len(membersMap), len(no2fa), 100-100*float64(len(no2fa))/float64(len(membersMap)))
-		var ldapUsername, ldapUsernameString string
-		for member := range no2fa {
-			member = strings.ToLower(member)
-			if _, ok := r.githubToLdap[member]; ok {
-				ldapUsernameString = ldapUsername + " / "
-			}
-			ldapUsername = r.githubToLdap[member]
-			log.Printf("[info] github: user %s%s in organization %s has 2fa disabled", ldapUsername, member, org.Name)
+		if _, ok := teamsMap[r.p.UserplexTeamName]; !ok {
+			log.Printf("[error] github: could not find UserplexTeam \"%s\" for organization %s", r.p.UserplexTeamName, org.Name)
+			// skip org
+			continue
 		}
-
 		userplexedUsers := teamMembersMap[r.p.UserplexTeamName]
+
+		var no2fa map[string]bool
+		if r.p.Enforce2FA {
+			no2fa = r.getOrgMembersMap(org, "2fa_disabled")
+			log.Printf("[info] github: organization %s has %d total members and %d with 2fa disabled. %.2f%% have 2fa enabled.",
+				org.Name, len(membersMap), len(no2fa), 100-100*float64(len(no2fa))/float64(len(membersMap)))
+		}
 
 		// member or admin
 		membershipType := "member"
@@ -119,11 +115,7 @@ func (r *run) Run() (err error) {
 			// set to true to indicate that user in github has ldap match
 			membersMap[user] = true
 
-			// not managed by userplex
-			if _, ok := userplexedUsers[user]; !ok {
-				continue
-			}
-
+			userWasAddedToTeam := false
 			// teams in config
 			for _, teamName := range org.Teams {
 				// if the team in config doesn't exist on github
@@ -144,18 +136,29 @@ func (r *run) Run() (err error) {
 							log.Printf("[error] github: could not add user %s to %s: %s, error: %v with status %s", user, org.Name, *team.Name, err, resp.Status)
 						}
 					}
+					if r.Conf.Create {
+						userWasAddedToTeam = true
+					}
 				}
 			}
-			if !r.Conf.ApplyChanges && r.Conf.Create {
+			if userWasAddedToTeam && !r.Conf.ApplyChanges && r.Conf.Create {
 				log.Printf("[dryrun] github: would have added %s to GitHub organization %s and teams %v", user, org.Name, org.Teams)
-			} else if r.Conf.Create {
+			} else if userWasAddedToTeam && r.Conf.Create {
 				r.notify(user, fmt.Sprintf("Userplex added %s to GitHub organization %s and teams %v", user, org.Name, org.Teams))
 			}
 		}
 
 		for member := range membersMap {
-			ldapUsername = ""
-			ldapUsernameString = ""
+			// if the member is not in the userplex team
+			_, isUserplexed := userplexedUsers[member]
+			if !isUserplexed {
+				if r.Conf.Debug {
+					log.Printf("[debug] github: skipping member %s in organization %s because they are not in UserplexTeam %s", member, org.Name, r.p.UserplexTeamName)
+				}
+				continue
+			}
+
+			var ldapUsername, ldapUsernameString string
 			member = strings.ToLower(member)
 			if _, ok := r.githubToLdap[member]; ok {
 				ldapUsername = r.githubToLdap[member]
@@ -169,14 +172,24 @@ func (r *run) Run() (err error) {
 					userTeams = append(userTeams, *team.Name)
 				}
 			}
-			// if the member is not in ldap and is in the userplex team
-			// _, isUserplexed := teamMembersMap[r.p.UserplexTeamName][member]
-			if !membersMap[member] {
-				log.Printf("[info] user %s%s is not in ldap groups %s but is a member of github organization %s and teams %v", ldapUsernameString, member, r.Conf.LdapGroups, org.Name, userTeams)
+
+			// if the member does not have 2fa
+			_, no2fa := no2fa[member]
+
+			// if the user is in ldap
+			_, inLdap := membersMap[member]
+
+			if !inLdap || r.p.Enforce2FA && no2fa {
+				if !inLdap {
+					log.Printf("[info] user %s%s is not in ldap groups %s but is a member of github organization %s and teams %v", ldapUsernameString, member, r.Conf.LdapGroups, org.Name, userTeams)
+				}
+				if r.p.Enforce2FA && no2fa {
+					log.Printf("[info] user %s%s does not have 2FA enabled and is a member of github organization %s and teams %v", ldapUsernameString, member, org.Name, userTeams)
+				}
 				if !r.Conf.ApplyChanges && r.Conf.Delete {
 					log.Printf("[dryrun] Userplex would have removed %s from GitHub organization %s", member, org.Name)
 				}
-				if r.Conf.ApplyChanges && r.Conf.Delete && 1 == 0 {
+				if r.Conf.ApplyChanges && r.Conf.Delete {
 					resp, err = r.ghclient.Organizations.RemoveOrgMembership(org.Name, member)
 					if err != nil || resp.StatusCode != 200 {
 						log.Printf("[error] github: could not remove user %s from %s, error: %v with status %s", member, org.Name, err, resp.Status)
