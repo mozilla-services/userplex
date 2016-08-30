@@ -14,20 +14,7 @@ userplex:
 	$(GO) install $(PROJECT)
 
 go_vendor_dependencies:
-	$(GOGETTER) go.mozilla.org/mozldap
-	$(GOGETTER) gopkg.in/yaml.v2
-	$(GOGETTER) github.com/aws/aws-sdk-go
-	$(GOGETTER) github.com/zorkian/go-datadog-api
-	$(GOGETTER) github.com/gorhill/cronexpr
-	$(GOGETTER) golang.org/x/crypto/openpgp
-	$(GOGETTER) go.mozilla.org/sops
-	echo 'removing .git from vendored pkg and moving them to vendor'
-	find .tmpdeps/src -name ".git" ! -name ".gitignore" -exec rm -rf {} \; || exit 0
-	[ -d vendor ] && git rm -rf vendor/ || exit 0
-	mkdir vendor/ || exit 0
-	cp -ar .tmpdeps/src/* vendor/
-	git add vendor/
-	rm -rf .tmpdeps
+	glide install
 
 test:
 	$(GO) test $(PROJECT)/modules/...
