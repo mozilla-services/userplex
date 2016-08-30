@@ -20,6 +20,7 @@ go_vendor_dependencies:
 	$(GOGETTER) github.com/zorkian/go-datadog-api
 	$(GOGETTER) github.com/gorhill/cronexpr
 	$(GOGETTER) golang.org/x/crypto/openpgp
+	$(GOGETTER) go.mozilla.org/sops
 	echo 'removing .git from vendored pkg and moving them to vendor'
 	find .tmpdeps/src -name ".git" ! -name ".gitignore" -exec rm -rf {} \; || exit 0
 	[ -d vendor ] && git rm -rf vendor/ || exit 0
