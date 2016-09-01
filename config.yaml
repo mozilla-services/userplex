@@ -126,13 +126,14 @@ modules:
         ldapgroups:
         -   ops
         create: true
+        delete: true
         notify:
             mode: smtp
             recipient: '{ldap:mail}'
-        uidmap:
-        -   ldapuid: foobar
-            localuid: foo
-        credentials:
-                apikey: 2084notatoken
         parameters:
-            subdomain: my-company
+            subdomain: ops-pd
+        credentials:
+            apikey: 018jafajkf
+        uidmap:
+        -   ldapuid: foo@bar.com
+            localuid: foobar@bar.com

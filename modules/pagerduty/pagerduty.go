@@ -88,15 +88,16 @@ func (r *run) Run() (err error) {
 			ldapEmail = email
 			ldapEmailString = " (pagerduty) / " + ldapEmail + " (ldap)"
 		}
+		// keep pagerduty email if no ldapuid/localuid mapping
 		if ldapEmail == "" {
 			ldapEmail = user.Email
 		}
 
-		// if the user is in ldap
+		// if the user is in the ldap groups
 		if _, ok := ldapers[ldapEmail]; ok {
 			ldapers[ldapEmail] = true
 		} else {
-			// user not in ldap
+			// user not in ldap groups
 			log.Printf("[info] pagerduty %s: user %s%s is not in ldap groups %s but is in PagerDuty account %s", r.p.Subdomain, user.Email, ldapEmailString, r.Conf.LdapGroups, r.p.Subdomain)
 			if r.Conf.Delete {
 				if !r.Conf.ApplyChanges {
