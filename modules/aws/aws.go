@@ -96,14 +96,14 @@ func (r *run) Run() (err error) {
 
 	// create or add the users to groups.
 	if r.Conf.Create {
-		for uid, haspubkey := range ldapers {
+		for uid, hasPGPKey := range ldapers {
 			resp, err := r.cli.GetUser(&iam.GetUserInput{
 				UserName: aws.String(uid),
 			})
 			if err != nil || resp == nil {
 				log.Printf("[info] aws %q: user %q not found, needs to be created",
 					r.p.AccountName, uid)
-				if !haspubkey && r.Conf.NotifyUsers {
+				if !hasPGPKey && r.Conf.NotifyUsers {
 					log.Printf("[warning] aws %q: %q has no PGP fingerprint in LDAP, skipping creation",
 						r.p.AccountName, uid)
 					continue
@@ -144,6 +144,7 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 	for _, user := range users {
 		shortdn := strings.Split(user, ",")[0]
 		uid, hasPGPKey, err := r.getLdaper(shortdn)
+		r.getSSHPubKeys(uid)
 		if err != nil {
 			// error logging happens in getLdaper
 			continue
@@ -524,6 +525,24 @@ aws_secret_access_key = %s`,
 	}
 	// notify the user
 	r.notify(uid, strings.Join([]string{body, accesskey}, "\n"))
+}
+
+func (r *run) getSSHPubKeys(uid) ([]string, error) {
+	// reverse the uid map
+	for _, mapping := range r.Conf.UidMap {
+		if mapping.LocalUID == uid {
+			uid = mapping.LdapUid
+		}
+	}
+	dn, err := r.Conf.LdapCli.GetUserDNById(uid)
+	if err != nil {
+		log.Printf("[error] aws %q: couldn't find DN of user %q in ldap: %v",
+			r.p.AccountName, uid, err)
+		return []string{}, err
+	}
+	keys, err := r.Conf.LdapCli.GetUserSSHPublicKeys(dn)
+	log.Printf("uid: %s, dn: %s, ssh pubkeys: %v", uid, dn, keys)
+	return keys, err
 }
 
 func (r *run) notify(uid, body string) {
