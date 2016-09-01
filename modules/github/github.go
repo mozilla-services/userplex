@@ -141,9 +141,8 @@ func (r *run) Run() (err error) {
 					}
 				}
 			}
-			if userWasAddedToTeam && !r.Conf.ApplyChanges && r.Conf.Create {
+			if userWasAddedToTeam {
 				log.Printf("[dryrun] github: would have added %s to GitHub organization %s and teams %v", user, org.Name, org.Teams)
-			} else if userWasAddedToTeam && r.Conf.Create {
 				r.notify(user, fmt.Sprintf("Userplex added %s to GitHub organization %s and teams %v", user, org.Name, org.Teams))
 			}
 		}
@@ -186,14 +185,15 @@ func (r *run) Run() (err error) {
 				if r.p.Enforce2FA && no2fa {
 					log.Printf("[info] user %s%s does not have 2FA enabled and is a member of github organization %s and teams %v", ldapUsernameString, member, org.Name, userTeams)
 				}
-				if !r.Conf.ApplyChanges && r.Conf.Delete {
-					log.Printf("[dryrun] Userplex would have removed %s from GitHub organization %s", member, org.Name)
-				}
-				if r.Conf.ApplyChanges && r.Conf.Delete {
-					resp, err = r.ghclient.Organizations.RemoveOrgMembership(org.Name, member)
-					if err != nil || resp.StatusCode != 200 {
-						log.Printf("[error] github: could not remove user %s from %s, error: %v with status %s", member, org.Name, err, resp.Status)
-						continue
+				if r.Conf.Delete {
+					if !r.Conf.ApplyChanges {
+						log.Printf("[dryrun] Userplex would have removed %s from GitHub organization %s", member, org.Name)
+					} else {
+						resp, err = r.ghclient.Organizations.RemoveOrgMembership(org.Name, member)
+						if err != nil || resp.StatusCode != 200 {
+							log.Printf("[error] github: could not remove user %s from %s, error: %v with status %s", member, org.Name, err, resp.Status)
+							continue
+						}
 					}
 					r.notify(member, fmt.Sprintf("Userplex removed %s to GitHub organization %s", member, org.Name))
 				}
