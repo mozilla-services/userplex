@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awsutil"
 	awscred "github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"go.mozilla.org/userplex/modules"
 )
@@ -37,7 +38,8 @@ type run struct {
 	Conf modules.Configuration
 	p    parameters
 	c    credentials
-	cli  *iam.IAM
+	iam  *iam.IAM
+	ec2  *ec2.EC2
 }
 
 type parameters struct {
@@ -67,9 +69,14 @@ func (r *run) Run() (err error) {
 	if err != nil {
 		return
 	}
-	r.cli = r.initIamClient()
-	if r.cli == nil {
-		return fmt.Errorf("failed to connect to aws using access key %q", r.c.AccessKey)
+	r.iam = r.initIamClient()
+	if r.iam == nil {
+		return fmt.Errorf("[error] aws iam: failed to connect to aws using access key %q", r.c.AccessKey)
+	}
+
+	r.ec2 = r.initEc2Client()
+	if r.ec2 == nil {
+		return fmt.Errorf("[error] aws ec2: failed to connect to aws using access key %q", r.c.AccessKey)
 	}
 
 	if r.Conf.ResetUsers != "" {
@@ -97,7 +104,7 @@ func (r *run) Run() (err error) {
 	// create or add the users to groups.
 	if r.Conf.Create {
 		for uid, hasPGPKey := range ldapers {
-			resp, err := r.cli.GetUser(&iam.GetUserInput{
+			resp, err := r.iam.GetUser(&iam.GetUserInput{
 				UserName: aws.String(uid),
 			})
 			if err != nil || resp == nil {
@@ -144,7 +151,6 @@ func (r *run) getLdapers() (lgm map[string]bool) {
 	for _, user := range users {
 		shortdn := strings.Split(user, ",")[0]
 		uid, hasPGPKey, err := r.getLdaper(shortdn)
-		r.getSSHPubKeys(uid)
 		if err != nil {
 			// error logging happens in getLdaper
 			continue
@@ -190,15 +196,15 @@ func (r *run) getLdaper(shortdn string) (uid string, hasPGPKey bool, err error) 
 	return
 }
 
-func (r *run) getIamers() (igm map[string]bool) {
-	igm = make(map[string]bool)
+func (r *run) getIamers() map[string]bool {
+	iamers := make(map[string]bool)
 	for _, group := range r.p.IamGroups {
-		err := r.cli.GetGroupPages(&iam.GetGroupInput{
+		err := r.iam.GetGroupPages(&iam.GetGroupInput{
 			GroupName: aws.String(group),
 		}, func(page *iam.GetGroupOutput, lastpage bool) bool {
 			for _, user := range page.Users {
 				iamuser := strings.Replace(awsutil.Prettify(user.UserName), `"`, ``, -1)
-				igm[iamuser] = true
+				iamers[iamuser] = true
 			}
 			if lastpage {
 				return false
@@ -208,10 +214,20 @@ func (r *run) getIamers() (igm map[string]bool) {
 		if err != nil {
 			log.Printf("[error] aws %q: failed to retrieve users from IAM group %q: %v",
 				r.p.AccountName, group, err)
-			continue
+			// empty map
+			return make(map[string]bool)
 		}
 	}
-	return
+	return iamers
+}
+
+func (r *run) initEc2Client() *ec2.EC2 {
+	var awsconf aws.Config
+	if r.c.AccessKey != "" && r.c.SecretKey != "" {
+		awscreds := awscred.NewStaticCredentials(r.c.AccessKey, r.c.SecretKey, "")
+		awsconf.Credentials = awscreds
+	}
+	return ec2.New(session.New(), &awsconf)
 }
 
 func (r *run) initIamClient() *iam.IAM {
@@ -227,11 +243,14 @@ func (r *run) initIamClient() *iam.IAM {
 // user to the necessary groups, and send it an email
 func (r *run) createIamUser(uid string) {
 	var (
-		accesskey string
-		cuo       *iam.CreateUserOutput
-		clpo      *iam.CreateLoginProfileOutput
-		cako      *iam.CreateAccessKeyOutput
-		err       error
+		sshKeyText    string
+		accessKeyText string
+		cuo           *iam.CreateUserOutput
+		clpo          *iam.CreateLoginProfileOutput
+		cako          *iam.CreateAccessKeyOutput
+		sshkeys       []string
+		ikpo          *ec2.ImportKeyPairOutput
+		err           error
 	)
 	password := "P" + randToken() + "%"
 	body := fmt.Sprintf(`New AWS account:
@@ -246,7 +265,7 @@ url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName
 		r.notify(uid, body)
 		return
 	}
-	cuo, err = r.cli.CreateUser(&iam.CreateUserInput{
+	cuo, err = r.iam.CreateUser(&iam.CreateUserInput{
 		UserName: aws.String(uid),
 	})
 	if err != nil || cuo == nil {
@@ -254,7 +273,7 @@ url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName
 			r.p.AccountName, uid, err)
 		return
 	}
-	clpo, err = r.cli.CreateLoginProfile(&iam.CreateLoginProfileInput{
+	clpo, err = r.iam.CreateLoginProfile(&iam.CreateLoginProfileInput{
 		Password:              aws.String(password),
 		UserName:              aws.String(uid),
 		PasswordResetRequired: aws.Bool(true),
@@ -268,7 +287,7 @@ url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName
 		r.addUserToIamGroup(uid, group)
 	}
 	if r.p.CreateAccessKey {
-		cako, err = r.cli.CreateAccessKey(&iam.CreateAccessKeyInput{
+		cako, err = r.iam.CreateAccessKey(&iam.CreateAccessKeyInput{
 			UserName: aws.String(uid),
 		})
 		if err != nil || cako == nil {
@@ -276,7 +295,7 @@ url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName
 				r.p.AccountName, uid, err)
 			return
 		}
-		accesskey = fmt.Sprintf(`
+		accessKeyText = fmt.Sprintf(`
 Add the lines below to ~/.aws/credentials
 [%s]
 aws_access_key_id = %s
@@ -285,12 +304,35 @@ aws_secret_access_key = %s`,
 			*cako.AccessKey.AccessKeyId,
 			*cako.AccessKey.SecretAccessKey)
 	}
+	sshkeys, err = r.getSSHPubKeys(uid)
+	if err != nil {
+		log.Printf("[error] aws %q: LDAP failed to get SSH keys for user %q: %v.",
+			r.p.AccountName, uid, err)
+	}
+	if len(sshkeys) > 0 {
+		sshKeyText = fmt.Sprintf("\nCreated the following AWS SSH keys in AWS corresponding public keys in LDAP:")
+	}
+	for i, key := range sshkeys {
+		keyname := uid + "-key-" + string(i)
+		ikpo, err = r.ec2.ImportKeyPair(&ec2.ImportKeyPairInput{
+			KeyName:           aws.String(keyname),
+			PublicKeyMaterial: []byte(key),
+		})
+		if err != nil || ikpo == nil {
+			log.Printf("[error] aws %q: failed to create SSH key %s for user %q: %v",
+				r.p.AccountName, keyname, uid, err)
+			return
+		}
+		log.Printf("ikpo: %v", ikpo)
+		sshKeyText += fmt.Sprintf("\n%s, MD5 Fingerprint: %s", *ikpo.KeyName, *ikpo.KeyFingerprint)
+	}
+
 	// notify the user
-	r.notify(uid, strings.Join([]string{body, accesskey}, "\n"))
+	r.notify(uid, strings.Join([]string{body, accessKeyText, sshKeyText}, "\n"))
 }
 
 func (r *run) updateUserGroups(uid string) (updated bool) {
-	gresp, err := r.cli.ListGroupsForUser(&iam.ListGroupsForUserInput{
+	gresp, err := r.iam.ListGroupsForUser(&iam.ListGroupsForUserInput{
 		UserName: aws.String(uid),
 	})
 	if err != nil || gresp == nil {
@@ -323,7 +365,7 @@ func (r *run) addUserToIamGroup(uid, group string) {
 			r.p.AccountName, uid, group)
 		return
 	}
-	resp, err := r.cli.AddUserToGroup(&iam.AddUserToGroupInput{
+	resp, err := r.iam.AddUserToGroup(&iam.AddUserToGroupInput{
 		GroupName: aws.String(group),
 		UserName:  aws.String(uid),
 	})
@@ -350,7 +392,7 @@ func (r *run) removeIamUser(uid string) {
 	}
 
 	// remove all user's access keys
-	lakfu, err := r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
+	lakfu, err := r.iam.ListAccessKeys(&iam.ListAccessKeysInput{
 		UserName: aws.String(uid),
 	})
 	if err != nil || lakfu == nil {
@@ -369,7 +411,7 @@ func (r *run) removeIamUser(uid string) {
 			AccessKeyId: accesskey.AccessKeyId,
 			UserName:    aws.String(uid),
 		}
-		dako, err = r.cli.DeleteAccessKey(&daki)
+		dako, err = r.iam.DeleteAccessKey(&daki)
 		if err != nil || dako == nil {
 			log.Printf("[error] aws %q: failed to delete access key %q of user %q: %v. request was %q.",
 				r.p.AccountName, keyid, uid, err, daki.String())
@@ -380,7 +422,7 @@ func (r *run) removeIamUser(uid string) {
 
 	}
 	// remove the user from all IAM groups
-	lgfu, err = r.cli.ListGroupsForUser(&iam.ListGroupsForUserInput{
+	lgfu, err = r.iam.ListGroupsForUser(&iam.ListGroupsForUserInput{
 		UserName: aws.String(uid),
 	})
 	if err != nil || lgfu == nil {
@@ -395,7 +437,7 @@ func (r *run) removeIamUser(uid string) {
 			GroupName: iamgroup.GroupName,
 			UserName:  aws.String(uid),
 		}
-		rufg, err = r.cli.RemoveUserFromGroup(rufgi)
+		rufg, err = r.iam.RemoveUserFromGroup(rufgi)
 		if err != nil || rufg == nil {
 			log.Printf("[error] aws %q: failed to remove user %q from group %q: %v. request was %q.",
 				r.p.AccountName, uid, gname, err, rufgi.String())
@@ -404,14 +446,14 @@ func (r *run) removeIamUser(uid string) {
 				r.p.AccountName, uid, gname)
 		}
 	}
-	dlpo, err = r.cli.DeleteLoginProfile(&iam.DeleteLoginProfileInput{
+	dlpo, err = r.iam.DeleteLoginProfile(&iam.DeleteLoginProfileInput{
 		UserName: aws.String(uid),
 	})
 	if err != nil || dlpo == nil {
 		r.debug("aws %q: user %q did not have an aws login profile to delete",
 			r.p.AccountName, uid)
 	}
-	duo, err = r.cli.DeleteUser(&iam.DeleteUserInput{
+	duo, err = r.iam.DeleteUser(&iam.DeleteUserInput{
 		UserName: aws.String(uid),
 	})
 	if err != nil || duo == nil {
@@ -450,7 +492,7 @@ url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName
 		r.notify(uid, body)
 		return
 	}
-	glpo, err = r.cli.GetLoginProfile(&iam.GetLoginProfileInput{
+	glpo, err = r.iam.GetLoginProfile(&iam.GetLoginProfileInput{
 		UserName: aws.String(uid),
 	})
 	if err != nil {
@@ -459,7 +501,7 @@ url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName
 		return
 	}
 	if glpo == nil {
-		clpo, err = r.cli.CreateLoginProfile(&iam.CreateLoginProfileInput{
+		clpo, err = r.iam.CreateLoginProfile(&iam.CreateLoginProfileInput{
 			Password:              aws.String(password),
 			UserName:              aws.String(uid),
 			PasswordResetRequired: aws.Bool(true),
@@ -470,7 +512,7 @@ url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName
 			return
 		}
 	} else {
-		ulpo, err = r.cli.UpdateLoginProfile(&iam.UpdateLoginProfileInput{
+		ulpo, err = r.iam.UpdateLoginProfile(&iam.UpdateLoginProfileInput{
 			Password:              aws.String(password),
 			UserName:              aws.String(uid),
 			PasswordResetRequired: aws.Bool(true),
@@ -481,7 +523,7 @@ url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName
 			return
 		}
 	}
-	lako, err = r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
+	lako, err = r.iam.ListAccessKeys(&iam.ListAccessKeysInput{
 		UserName: aws.String(uid),
 	})
 	if err != nil || lako == nil {
@@ -495,7 +537,7 @@ url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName
 			AccessKeyId: key.AccessKeyId,
 			UserName:    aws.String(uid),
 		}
-		dako, err = r.cli.DeleteAccessKey(&daki)
+		dako, err = r.iam.DeleteAccessKey(&daki)
 		if err != nil || dako == nil {
 			log.Printf("[error] aws %q: failed to delete access key %q of user %q: %v. request was %q.",
 				r.p.AccountName, *key.AccessKeyId, uid, err, daki.String())
@@ -505,7 +547,7 @@ url:   https://%s.signin.aws.amazon.com/console`, uid, password, r.p.AccountName
 		}
 	}
 	if r.p.CreateAccessKey {
-		cako, err = r.cli.CreateAccessKey(&iam.CreateAccessKeyInput{
+		cako, err = r.iam.CreateAccessKey(&iam.CreateAccessKeyInput{
 			UserName: aws.String(uid),
 		})
 		if err != nil || cako == nil {
@@ -527,7 +569,7 @@ aws_secret_access_key = %s`,
 	r.notify(uid, strings.Join([]string{body, accesskey}, "\n"))
 }
 
-func (r *run) getSSHPubKeys(uid) ([]string, error) {
+func (r *run) getSSHPubKeys(uid string) ([]string, error) {
 	// reverse the uid map
 	for _, mapping := range r.Conf.UidMap {
 		if mapping.LocalUID == uid {
@@ -536,12 +578,11 @@ func (r *run) getSSHPubKeys(uid) ([]string, error) {
 	}
 	dn, err := r.Conf.LdapCli.GetUserDNById(uid)
 	if err != nil {
-		log.Printf("[error] aws %q: couldn't find DN of user %q in ldap: %v",
+		log.Printf("[error] aws %q: LDAP failed to get DN for user %q: %v.",
 			r.p.AccountName, uid, err)
-		return []string{}, err
 	}
-	keys, err := r.Conf.LdapCli.GetUserSSHPublicKeys(dn)
-	log.Printf("uid: %s, dn: %s, ssh pubkeys: %v", uid, dn, keys)
+	shortdn := strings.Split(dn, ",")[0]
+	keys, err := r.Conf.LdapCli.GetUserSSHPublicKeys(shortdn)
 	return keys, err
 }
 
