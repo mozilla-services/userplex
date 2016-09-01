@@ -23,6 +23,7 @@ import (
 	_ "go.mozilla.org/userplex/modules/aws"
 	_ "go.mozilla.org/userplex/modules/datadog"
 	_ "go.mozilla.org/userplex/modules/github"
+	_ "go.mozilla.org/userplex/modules/pagerduty"
 
 	"github.com/gorhill/cronexpr"
 	"go.mozilla.org/mozldap"

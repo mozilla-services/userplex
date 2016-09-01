@@ -23,3 +23,4 @@ import:
   - openpgp
   - openpgp/armor
 - package: gopkg.in/yaml.v2
+- package: github.com/PagerDuty/go-pagerduty
