@@ -276,6 +276,26 @@ func (cli *Client) GetUserId(shortdn string) (uid string, err error) {
 	return
 }
 
+// GetUserFullNameByEmail returns the distinguished name of a given user using his ID
+//
+// example: cli.GetUserFullNameByEmail("jvehent@mozilla.com")
+func (cli *Client) GetUserFullNameByEmail(email string) (fullName string, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			err = fmt.Errorf("mozldap.GetUserFullNameByEmail(mail=%q) -> %v", email, e)
+		}
+	}()
+	entries, err := cli.Search("", "(mail="+email+")", []string{"cn"})
+	if err != nil {
+		panic(err)
+	}
+	if len(entries) != 1 {
+		panic(fmt.Sprintf("found %d entries matching mail %q, expected 1", len(entries), email))
+	}
+	fullName = entries[0].GetAttributeValue("cn")
+	return
+}
+
 // GetUserDNByID returns the distinguished name of a given user using his ID
 //
 // example: cli.GetUserDNByID("jvehent")

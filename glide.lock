@@ -1,10 +1,10 @@
 hash: bcc01af0647fb5989051c47b5f705960ea25b669f10c3f90e730cfb90682c122
-updated: 2016-09-01T12:08:43.536548542-07:00
+updated: 2016-09-02T10:28:04.619001171-07:00
 imports:
 - name: github.com/autrilla/yaml
   version: 8ac3c7b2b592354bed79f33de3e3c83e573b9129
 - name: github.com/aws/aws-sdk-go
-  version: d6b4bfeba6997082629986cac2a932a233ba745e
+  version: 6ac30507cca29249f4d49af45a8efc98b84088ee
   subpackages:
   - aws
   - aws/awserr
@@ -80,7 +80,7 @@ imports:
 - name: go.mozilla.org/gopgagent
   version: da4f24003cbec8ef26fdd0761e40eab273a02832
 - name: go.mozilla.org/mozldap
-  version: c029f2c4e75de2e472f7f8dbc8483e009e3ac509
+  version: 312718c1e6b1b13561fc30af0d0ab1a682064da9
 - name: go.mozilla.org/sops
   version: 213242c7e7091dff2873b2ac664c7e32cf0ed8f5
   subpackages:
