@@ -35,8 +35,7 @@ type run struct {
 
 	pd *pagerduty.Client
 
-	pagerdutyEmailToLdapEmail  map[string]string
-	ldapEmailToPagerdutyEmails map[string][]string
+	pagerdutyEmailToLdapEmail map[string]string
 }
 
 type parameters struct {
@@ -90,11 +89,11 @@ func (r *run) Run() (err error) {
 			}
 			if r.Conf.Delete {
 				if !r.Conf.ApplyChanges {
-					log.Printf("[dryrun] pagerduty %q: would have deleted user %q", r.p.Subdomain, user.Email)
+					log.Printf("[dryrun] pagerduty %q: would have deleted user %s%s", r.p.Subdomain, user.Email, ldapEmailString)
 				} else {
 					err = r.pd.DeleteUser(user.ID)
 					if err != nil {
-						return fmt.Errorf("[error] pagerduty %q: could not delete user %q: %s", r.p.Subdomain, user.Email, err.Error())
+						return fmt.Errorf("[error] pagerduty %q: could not delete user %s%s: %s", r.p.Subdomain, user.Email, ldapEmailString, err.Error())
 					}
 					countDeleted++
 				}
@@ -106,19 +105,9 @@ func (r *run) Run() (err error) {
 	countCreated := 0
 	// ldap users in selected groups
 	for ldapEmail, isInPagerduty := range ldapers {
-		// if there's an ldapuid/localuid mapping for the user
-		var (
-			pagerdutyEmails       []string
-			pagerdutyEmailsString string
-		)
-		if emails, ok := r.ldapEmailToPagerdutyEmails[ldapEmail]; ok {
-			pagerdutyEmails = emails
-			pagerdutyEmailsString = strings.Join(pagerdutyEmails, ", ") + " (pagerduty) / "
-		}
-
 		if !isInPagerduty && r.Conf.Create {
 			if r.Conf.Debug {
-				log.Printf("[info] pagerduty %q: user %s%s (ldap) is not in Pagerduty account %q", r.p.Subdomain, pagerdutyEmailsString, ldapEmail, r.p.Subdomain)
+				log.Printf("[info] pagerduty %q: user %q is not in Pagerduty account %q", r.p.Subdomain, ldapEmail, r.p.Subdomain)
 			}
 			if !r.Conf.ApplyChanges {
 				log.Printf("[dryrun] pagerduty %q: would have created user %q", r.p.Subdomain, ldapEmail)
@@ -156,10 +145,8 @@ func (r *run) createPagerdutyUser(ldapEmail string) error {
 
 func (r *run) buildLdapMapping() {
 	r.pagerdutyEmailToLdapEmail = make(map[string]string)
-	r.ldapEmailToPagerdutyEmails = make(map[string][]string)
 	for _, mapping := range r.Conf.UidMap {
 		r.pagerdutyEmailToLdapEmail[mapping.LocalUID] = mapping.LdapUid
-		r.ldapEmailToPagerdutyEmails[mapping.LdapUid] = append(r.ldapEmailToPagerdutyEmails[mapping.LdapUid], mapping.LocalUID)
 	}
 }
 
