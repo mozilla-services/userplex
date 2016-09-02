@@ -10,9 +10,11 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/awsutil"
 	awscred "github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -222,21 +224,23 @@ func (r *run) getIamers() map[string]bool {
 }
 
 func (r *run) initEc2Client() *ec2.EC2 {
-	var awsconf aws.Config
+	// region shouldn't matter here, importing keys is region agnostic
+	awsconf := aws.NewConfig().WithRegion("us-west-2")
 	if r.c.AccessKey != "" && r.c.SecretKey != "" {
-		awscreds := awscred.NewStaticCredentials(r.c.AccessKey, r.c.SecretKey, "")
-		awsconf.Credentials = awscreds
+		creds := awscred.NewStaticCredentials(r.c.AccessKey, r.c.SecretKey, "")
+		awsconf = awsconf.WithCredentials(creds)
 	}
-	return ec2.New(session.New(), &awsconf)
+
+	return ec2.New(session.New(), awsconf)
 }
 
 func (r *run) initIamClient() *iam.IAM {
-	var awsconf aws.Config
+	awsconf := aws.NewConfig()
 	if r.c.AccessKey != "" && r.c.SecretKey != "" {
-		awscreds := awscred.NewStaticCredentials(r.c.AccessKey, r.c.SecretKey, "")
-		awsconf.Credentials = awscreds
+		creds := awscred.NewStaticCredentials(r.c.AccessKey, r.c.SecretKey, "")
+		awsconf = awsconf.WithCredentials(creds)
 	}
-	return iam.New(session.New(), &awsconf)
+	return iam.New(session.New(), awsconf)
 }
 
 // create a user in aws, assign temporary credentials and force password change, add the
@@ -309,22 +313,33 @@ aws_secret_access_key = %s`,
 		log.Printf("[error] aws %q: LDAP failed to get SSH keys for user %q: %v.",
 			r.p.AccountName, uid, err)
 	}
-	if len(sshkeys) > 0 {
-		sshKeyText = fmt.Sprintf("\nCreated the following AWS SSH keys in AWS corresponding public keys in LDAP:")
-	}
+	sshKeyText = fmt.Sprintf("\nCreated the following AWS SSH keys from your SSH keys in LDAP:")
+	createdKeys := false
 	for i, key := range sshkeys {
-		keyname := uid + "-key-" + string(i)
+		keyname := uid + "-key-" + strconv.Itoa(i)
 		ikpo, err = r.ec2.ImportKeyPair(&ec2.ImportKeyPairInput{
 			KeyName:           aws.String(keyname),
 			PublicKeyMaterial: []byte(key),
 		})
 		if err != nil || ikpo == nil {
+			if awsErr, ok := err.(awserr.Error); ok {
+				if awsErr.Code() == "InvalidKeyPair.Duplicate" {
+					if r.Conf.Debug {
+						log.Printf("[debug] aws %q: keypair %s already exists: %v",
+							r.p.AccountName, keyname, awsErr.Message())
+					}
+					continue
+				}
+			}
 			log.Printf("[error] aws %q: failed to create SSH key %s for user %q: %v",
 				r.p.AccountName, keyname, uid, err)
 			return
 		}
-		log.Printf("ikpo: %v", ikpo)
 		sshKeyText += fmt.Sprintf("\n%s, MD5 Fingerprint: %s", *ikpo.KeyName, *ikpo.KeyFingerprint)
+		createdKeys = true
+	}
+	if !createdKeys {
+		sshKeyText = ""
 	}
 
 	// notify the user
