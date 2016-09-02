@@ -37,8 +37,8 @@ Config explanations:
       parameters:
           enforce2fa: true
           userplexteamname: userplexed
-          organizations:
-          -   name: my-org
-              teams:
+          organization:
+            name: my-org
+            teams:
               -   userplexed
               -   test-team`
