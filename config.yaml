@@ -113,14 +113,22 @@ modules:
     -   name: github
         ldapgroups:
         -   developers
-        oauthtoken: 1982398notrealtoken
+        create: true
+        notify:
+            mode: smtp
+            recipient: '{ldap:mail}'
+        uidmap:
+        -   ldapuid: foobar
+            localuid: foo
+        credentials:
+            oauthtoken: 1982398notrealtoken
         parameters:
             userplexteamname: userplexed
-        organizations:
-        -   name: my-org
-            teams:
-            -   userplexed
-            -   test-team
+            organizations:
+            -   name: my-org
+                teams:
+                -   userplexed
+                -   test-team
 
     -   name: pagerduty
         ldapgroups:
