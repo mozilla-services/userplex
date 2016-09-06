@@ -81,14 +81,14 @@ func (r *run) Run() (err error) {
 	// name -> bool
 	membersMap := r.getOrgMembersMap(r.p.Organization, "all")
 	if r.Conf.Debug {
-		log.Printf("[info] github: found %d users for organization %s", len(membersMap), r.p.Organization.Name)
+		log.Printf("[debug] github: found %d users for organization %s", len(membersMap), r.p.Organization.Name)
 	}
 
 	// get all teams for the organization
 	// name -> team
 	teamsMap := r.getOrgTeamsMap(r.p.Organization)
 	if r.Conf.Debug {
-		log.Printf("[info] github: found %d teams for organization %s", len(teamsMap), r.p.Organization.Name)
+		log.Printf("[debug] github: found %d teams for organization %s", len(teamsMap), r.p.Organization.Name)
 	}
 
 	teamMembersMap := make(map[string]map[string]bool)
@@ -122,7 +122,7 @@ func (r *run) Run() (err error) {
 		for _, teamName := range r.p.Organization.Teams {
 			// if the team in config doesn't exist on github
 			if team, ok := teamsMap[teamName]; !ok {
-				log.Printf("[error] github: could not find team %s for organization %s", team, r.p.Organization.Name)
+				return fmt.Errorf("[error] github: could not find team %s for organization %s", team, r.p.Organization.Name)
 			} else {
 				// if the user is already in the team, skip adding them
 				if _, ok := teamMembersMap[teamName][user]; ok {
@@ -135,7 +135,7 @@ func (r *run) Run() (err error) {
 						Role: membershipType,
 					})
 					if err != nil || resp.StatusCode != 200 {
-						log.Printf("[error] github: could not add user %s to %s: %s, error: %v with status %s", user, r.p.Organization.Name, *team.Name, err, resp.Status)
+						return fmt.Errorf("[error] github: could not add user %s to %s: %s, error: %v with status %s", user, r.p.Organization.Name, *team.Name, err, resp.Status)
 					}
 				}
 				if r.Conf.Create {
@@ -186,8 +186,8 @@ func (r *run) Run() (err error) {
 		_, inLdap := membersMap[member]
 
 		if !inLdap || r.p.Enforce2FA && no2fa {
-			if !inLdap {
-				log.Printf("[info] user %s%s is not in ldap groups %s but is a member of github organization %s and teams %v", ldapUsernameString, member, r.Conf.LdapGroups, r.p.Organization.Name, userTeams)
+			if !inLdap && r.Conf.Debug {
+				log.Printf("[debug] user %s%s is not in ldap groups %s but is a member of github organization %s and teams %v", ldapUsernameString, member, r.Conf.LdapGroups, r.p.Organization.Name, userTeams)
 			}
 			if r.p.Enforce2FA && no2fa {
 				log.Printf("[info] user %s%s does not have 2FA enabled and is a member of github organization %s and teams %v", ldapUsernameString, member, r.p.Organization.Name, userTeams)
@@ -257,6 +257,7 @@ func (r *run) getTeamMembersMap(team *github.Team) (membersMap map[string]bool) 
 		members, resp, err := r.ghclient.Organizations.ListTeamMembers(*team.ID, opt)
 		if err != nil || resp.StatusCode != 200 {
 			log.Printf("[error] github: could not list members for organization %s, error: %v with status %s", team, err, resp.Status)
+			return
 		}
 		for _, member := range members {
 			membersMap[*member.Login] = false
@@ -278,6 +279,7 @@ func (r *run) getOrgTeamsMap(org organization) (teamsMap map[string]*github.Team
 		teams, resp, err := r.ghclient.Organizations.ListTeams(org.Name, opt)
 		if err != nil || resp.StatusCode != 200 {
 			log.Printf("[error] github: could not list teams for organization %s, error: %v", org.Name, err)
+			return
 		}
 		for _, team := range teams {
 			teamsMap[*team.Name] = team
@@ -298,8 +300,7 @@ func (r *run) notify(user string, body string) (err error) {
 		}
 		rcpt, err = r.Conf.LdapCli.GetUserEmailByUid(user)
 		if err != nil {
-			log.Printf("[error] github: couldn't find email of user %q in ldap, notification not sent: %v", user, err)
-			return
+			return fmt.Errorf("[error] github: couldn't find email of user %q in ldap, notification not sent: %v", user, err)
 		}
 	}
 	r.Conf.Notify.Channel <- modules.Notification{
