@@ -110,7 +110,6 @@ func (r *run) Run() (err error) {
 				}
 				r.createIamUser(uid)
 				countCreated++
-
 			} else {
 				if r.updateUserGroups(uid) {
 					countGroupUpdated++
@@ -166,8 +165,6 @@ func (r *run) getLdaperByUID(ldapUserID string) (uid string, hasPGPKey bool, err
 }
 
 func (r *run) getLdaper(shortdn string) (uid string, hasPGPKey bool, err error) {
-	// assume it exists
-	hasPGPKey = true
 	uid, err = r.Conf.LdapCli.GetUserId(shortdn)
 	if err != nil {
 		log.Printf("[error] aws %q: ldap query failed with error %v", r.p.AccountName, err)
@@ -182,12 +179,12 @@ func (r *run) getLdaper(shortdn string) (uid string, hasPGPKey bool, err error) 
 	if r.Conf.NotifyUsers {
 		// make sure we can find a PGP public key for the user to encrypt the notification
 		// if no pubkey is found, log an error and set the user's entry to False
-		_, err = r.Conf.LdapCli.GetUserPGPKey(shortdn)
-		if err != nil {
+		_, pgpErr := r.Conf.LdapCli.GetUserPGPKey(shortdn)
+		if pgpErr != nil {
 			r.debug("aws %q: no pgp public key could be found for %s: %v",
-				r.p.AccountName, shortdn, err)
-			hasPGPKey = false
+				r.p.AccountName, shortdn, pgpErr)
 		}
+		hasPGPKey = true
 	}
 	return
 }
@@ -195,17 +192,22 @@ func (r *run) getLdaper(shortdn string) (uid string, hasPGPKey bool, err error) 
 func (r *run) getIamers() (igm map[string]bool) {
 	igm = make(map[string]bool)
 	for _, group := range r.p.IamGroups {
-		resp, err := r.cli.GetGroup(&iam.GetGroupInput{
+		err := r.cli.GetGroupPages(&iam.GetGroupInput{
 			GroupName: aws.String(group),
+		}, func(page *iam.GetGroupOutput, lastpage bool) bool {
+			for _, user := range page.Users {
+				iamuser := strings.Replace(awsutil.Prettify(user.UserName), `"`, ``, -1)
+				igm[iamuser] = true
+			}
+			if lastpage {
+				return false
+			}
+			return true
 		})
-		if err != nil || resp == nil {
+		if err != nil {
 			log.Printf("[error] aws %q: failed to retrieve users from IAM group %q: %v",
 				r.p.AccountName, group, err)
 			continue
-		}
-		for _, user := range resp.Users {
-			iamuser := strings.Replace(awsutil.Prettify(user.UserName), `"`, ``, -1)
-			igm[iamuser] = true
 		}
 	}
 	return
@@ -340,6 +342,11 @@ func (r *run) removeIamUser(uid string) {
 		dako *iam.DeleteAccessKeyOutput
 		rufg *iam.RemoveUserFromGroupOutput
 	)
+	if !r.Conf.ApplyChanges {
+		log.Printf("[dryrun] aws %q: would have deleted AWS IAM user %q",
+			r.p.AccountName, uid)
+		return
+	}
 
 	// remove all user's access keys
 	lakfu, err := r.cli.ListAccessKeys(&iam.ListAccessKeysInput{
@@ -383,11 +390,6 @@ func (r *run) removeIamUser(uid string) {
 	// iterate through the groups and find the missing ones
 	for _, iamgroup := range lgfu.Groups {
 		gname := strings.Replace(awsutil.Prettify(iamgroup.GroupName), `"`, ``, -1)
-		if !r.Conf.ApplyChanges {
-			r.debug("[dryrun] aws %q: would have removed user %q from group %q",
-				r.p.AccountName, uid, gname)
-			continue
-		}
 		rufgi := &iam.RemoveUserFromGroupInput{
 			GroupName: iamgroup.GroupName,
 			UserName:  aws.String(uid),
@@ -400,11 +402,6 @@ func (r *run) removeIamUser(uid string) {
 			r.debug("aws %q: removed user %q from group %q",
 				r.p.AccountName, uid, gname)
 		}
-	}
-	if !r.Conf.ApplyChanges {
-		log.Printf("[dryrun] aws %q: would have deleted AWS IAM user %q",
-			r.p.AccountName, uid)
-		return
 	}
 	dlpo, err = r.cli.DeleteLoginProfile(&iam.DeleteLoginProfileInput{
 		UserName: aws.String(uid),
