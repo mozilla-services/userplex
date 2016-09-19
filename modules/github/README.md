@@ -3,6 +3,7 @@
 The Github userplex module audits users in organizations and correlates them with users in LDAP groups.
 
 Features:
+
       - supports an `enforce2fa` boolean parameter that audits and removes users without 2FA if `delete` is enabled.
       - correlates LDAP users with Github usernames via the `ldapuid` <=> `localuid` mapping
             - identifies which teams users are in an organization, adds them to all teams listed in the config if they are members of the requisite LDAP groups- adds users to an organization if they are in the mapping regardless of teams specified if `create` is enabled
@@ -10,6 +11,7 @@ Features:
                   - Note: does NOT remove users from teams that are not represented in config (intentionally)
 
 Config explanations:
+
       - credentials:
             - oauthtoken: a Github OAuth2 or Personal Access Token
       - parameters:
@@ -22,7 +24,8 @@ Config explanations:
                         - teamname2
 
 
-`-   name: github
+`-   name: github`
+
       ldapgroups:
       -   developers
       create: true
