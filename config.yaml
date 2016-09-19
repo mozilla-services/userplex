@@ -129,3 +129,19 @@ modules:
                 teams:
                 -   userplexed
                 -   test-team
+
+    -   name: pagerduty
+        ldapgroups:
+        -   ops
+        create: true
+        delete: true
+        notify:
+            mode: smtp
+            recipient: '{ldap:mail}'
+        parameters:
+            subdomain: ops-pd
+        credentials:
+            apikey: 018jafajkf
+        uidmap:
+        -   ldapuid: foo@bar.com
+            localuid: foobar@bar.com
