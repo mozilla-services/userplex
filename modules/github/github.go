@@ -155,15 +155,6 @@ func (r *run) Run() (err error) {
 
 	countRemoved := 0
 	for member := range membersMap {
-		// if the member is not in the userplex team
-		_, isUserplexed := userplexedUsers[member]
-		if !isUserplexed {
-			if r.Conf.Debug {
-				log.Printf("[debug] github: skipping member %s in organization %s because they are not in UserplexTeam %s", member, r.p.Organization.Name, r.p.UserplexTeamName)
-			}
-			continue
-		}
-
 		var ldapUsername, ldapUsernameString string
 		member = strings.ToLower(member)
 		if _, ok := r.githubToLdap[member]; ok {
@@ -185,26 +176,43 @@ func (r *run) Run() (err error) {
 		// if the user is in ldap
 		_, inLdap := membersMap[member]
 
-		if !inLdap || r.p.Enforce2FA && no2fa {
-			if !inLdap && r.Conf.Debug {
-				log.Printf("[debug] user %s%s is not in ldap groups %s but is a member of github organization %s and teams %v", ldapUsernameString, member, r.Conf.LdapGroups, r.p.Organization.Name, userTeams)
+		// if the member is not in the userplex team
+		_, isUserplexed := userplexedUsers[member]
+
+		shouldDelete := false
+		if !inLdap {
+			if r.Conf.Debug {
+				log.Printf("[debug] github: user %s%s is not in ldap groups %s but is a member of github organization %s and teams %v", ldapUsernameString, member, r.Conf.LdapGroups, r.p.Organization.Name, userTeams)
 			}
-			if r.p.Enforce2FA && no2fa {
-				log.Printf("[info] user %s%s does not have 2FA enabled and is a member of github organization %s and teams %v", ldapUsernameString, member, r.p.Organization.Name, userTeams)
-			}
-			if r.Conf.Delete {
-				if !r.Conf.ApplyChanges {
-					log.Printf("[dryrun] Userplex would have removed %s from GitHub organization %s", member, r.p.Organization.Name)
-				} else {
-					resp, err = r.ghclient.Organizations.RemoveOrgMembership(r.p.Organization.Name, member)
-					if err != nil || resp.StatusCode != 200 {
-						log.Printf("[error] github: could not remove user %s from %s, error: %v with status %s", member, r.p.Organization.Name, err, resp.Status)
-						continue
-					}
-					countRemoved++
+			shouldDelete = true
+		}
+
+		if r.p.Enforce2FA && no2fa {
+			log.Printf("[info] github: user %s%s does not have 2FA enabled and is a member of github organization %s and teams %v", ldapUsernameString, member, r.p.Organization.Name, userTeams)
+			shouldDelete = true
+		}
+
+		if shouldDelete && r.Conf.Delete {
+			// not in UserplexTeam -> skip
+			if !isUserplexed {
+				if r.Conf.Debug {
+					log.Printf("[debug] github: would have removed member %s in organization %s, but skipped because they are not in UserplexTeam %s", member, r.p.Organization.Name, r.p.UserplexTeamName)
 				}
-				r.notify(member, fmt.Sprintf("Userplex removed %s to GitHub organization %s", member, r.p.Organization.Name))
+				continue
 			}
+			if !r.Conf.ApplyChanges {
+				log.Printf("[dryrun] github: Userplex would have removed %s from GitHub organization %s", member, r.p.Organization.Name)
+				r.notify(member, fmt.Sprintf("Userplex removed %s to GitHub organization %s", member, r.p.Organization.Name))
+				continue
+			}
+			// applying changes, user is userplexed -> remove them
+			resp, err = r.ghclient.Organizations.RemoveOrgMembership(r.p.Organization.Name, member)
+			if err != nil || resp.StatusCode != 200 {
+				log.Printf("[error] github: could not remove user %s from %s, error: %v with status %s", member, r.p.Organization.Name, err, resp.Status)
+				continue
+			}
+			countRemoved++
+			r.notify(member, fmt.Sprintf("Userplex removed %s to GitHub organization %s", member, r.p.Organization.Name))
 		}
 	}
 
