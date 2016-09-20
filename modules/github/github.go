@@ -154,6 +154,7 @@ func (r *run) Run() (err error) {
 	}
 
 	countRemoved := 0
+	countSkipped := 0
 	for member := range membersMap {
 		var ldapUsername, ldapUsernameString string
 		member = strings.ToLower(member)
@@ -195,29 +196,29 @@ func (r *run) Run() (err error) {
 		if shouldDelete && r.Conf.Delete {
 			// not in UserplexTeam -> skip
 			if !isUserplexed {
-				if r.Conf.Debug {
-					log.Printf("[debug] github: would have removed member %s in organization %s, but skipped because they are not in UserplexTeam %s", member, r.p.Organization.Name, r.p.UserplexTeamName)
-				}
+				log.Printf("[info] github: would have removed member %s in organization %s, but skipped because they are not in UserplexTeam %q", member, r.p.Organization.Name, r.p.UserplexTeamName)
+				countSkipped++
 				continue
 			}
 			if !r.Conf.ApplyChanges {
-				log.Printf("[dryrun] github: Userplex would have removed %s from GitHub organization %s", member, r.p.Organization.Name)
+				log.Printf("[dryrun] github: Userplex would have removed %s%s from GitHub organization %s", ldapUsernameString, member, r.p.Organization.Name)
 				r.notify(member, fmt.Sprintf("Userplex removed %s to GitHub organization %s", member, r.p.Organization.Name))
-				continue
+			} else {
+				// applying changes, user is userplexed -> remove them
+				resp, err = r.ghclient.Organizations.RemoveOrgMembership(r.p.Organization.Name, member)
+				if err != nil || resp.StatusCode != 200 {
+					log.Printf("[error] github: could not remove user %s from %s, error: %v with status %s", member, r.p.Organization.Name, err, resp.Status)
+				}
 			}
-			// applying changes, user is userplexed -> remove them
-			resp, err = r.ghclient.Organizations.RemoveOrgMembership(r.p.Organization.Name, member)
-			if err != nil || resp.StatusCode != 200 {
-				log.Printf("[error] github: could not remove user %s from %s, error: %v with status %s", member, r.p.Organization.Name, err, resp.Status)
-				continue
-			}
+
+			// update count and send notification here regardless of ApplyChanges
 			countRemoved++
 			r.notify(member, fmt.Sprintf("Userplex removed %s to GitHub organization %s", member, r.p.Organization.Name))
 		}
 	}
 
-	log.Printf("[info] github %q: summary added=%d, removed=%d",
-		r.p.Organization.Name, countAdded, countRemoved)
+	log.Printf("[info] github %q: summary added=%d, removed=%d, skipped=%d",
+		r.p.Organization.Name, countAdded, countRemoved, countSkipped)
 
 	return nil
 }
