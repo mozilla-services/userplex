@@ -200,9 +200,9 @@ func (r *run) Run() (err error) {
 				countSkipped++
 				continue
 			}
+
 			if !r.Conf.ApplyChanges {
 				log.Printf("[dryrun] github: Userplex would have removed %s%s from GitHub organization %s", ldapUsernameString, member, r.p.Organization.Name)
-				r.notify(member, fmt.Sprintf("Userplex removed %s to GitHub organization %s", member, r.p.Organization.Name))
 			} else {
 				// applying changes, user is userplexed -> remove them
 				resp, err = r.ghclient.Organizations.RemoveOrgMembership(r.p.Organization.Name, member)
