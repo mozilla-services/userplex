@@ -43,9 +43,10 @@ type organization struct {
 }
 
 type parameters struct {
-	Organization     organization
-	UserplexTeamName string
-	Enforce2FA       bool
+	Organization                organization
+	UserplexTeamName            string
+	Enforce2FA                  bool
+	UseLdapGithubAccountMapping bool
 }
 
 type credentials struct {
@@ -321,25 +322,40 @@ func (r *run) notify(user string, body string) (err error) {
 	return
 }
 
-func (r *run) getLdapers() (lgm map[string]bool) {
-	lgm = make(map[string]bool)
+func (r *run) getLdapers() map[string]bool {
+	ldapers := make(map[string]bool)
 	users, err := r.Conf.LdapCli.GetEnabledUsersInGroups(r.Conf.LdapGroups)
 	if err != nil {
-		return
+		return ldapers
 	}
 	for _, user := range users {
 		shortdn := strings.Split(user, ",")[0]
 		uid, err := r.Conf.LdapCli.GetUserId(shortdn)
 		if err != nil {
-			log.Printf("[error] github: ldap query failed with error %v", err)
+			log.Printf("[error] github: ldap query GetUserId(%q) failed with error %v", uid, err)
 			continue
 		}
 
-		if _, ok := r.ldapToGithub[uid]; ok {
-			uid = r.ldapToGithub[uid]
+		if r.p.UseLdapGithubAccountMapping {
+			github, getGithubAccountErr := r.Conf.LdapCli.GetUserGithubByUID(uid)
+			if getGithubAccountErr != nil {
+				// this error can happen if the user does not have a githubProfile in ldap
+				if r.Conf.Debug {
+					log.Printf("[debug] github: ldap query GetUserGithubByUID(%q) failed with error %q", uid, getGithubAccountErr.Error())
+				}
+			} else {
+				// has a githubProfile in LDAP
+				r.githubToLdap[github] = uid
+				uid = github
+			}
+		} else {
+			// use the uidmap
+			if _, ok := r.ldapToGithub[uid]; ok {
+				uid = r.ldapToGithub[uid]
+			}
 		}
 
-		lgm[uid] = false
+		ldapers[uid] = false
 	}
-	return
+	return ldapers
 }

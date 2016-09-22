@@ -15,6 +15,7 @@ Config explanations:
       - credentials:
             - oauthtoken: a Github OAuth2 or Personal Access Token
       - parameters:
+            - useldapgithubaccountmapping: indicates whether to use the Github field in LDAP as opposed to the uidmap in config to map LDAP usernames to Github usernames
             - userplexteamname: the name of a team within your Github organization that has userplexed users
             - enforce2fa: enforces 2FA, removing users w/o it
             - organizations: a list of Github organizations for userplex to manage (supports multiple for the same set of LDAP users!)
