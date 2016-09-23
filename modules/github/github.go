@@ -146,9 +146,8 @@ func (r *run) Run() (err error) {
 		if userWasAddedToTeam {
 			if !r.Conf.ApplyChanges {
 				log.Printf("[dryrun] github: would have added %s to GitHub organization %s and teams %v", user, r.p.Organization.Name, r.p.Organization.Teams)
-			} else {
-				countAdded++
 			}
+			countAdded++
 			r.notify(user, fmt.Sprintf("Userplex added %s to GitHub organization %s and teams %v", user, r.p.Organization.Name, r.p.Organization.Teams))
 		}
 	}
