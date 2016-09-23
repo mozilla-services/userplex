@@ -34,7 +34,6 @@ type run struct {
 	c            credentials
 	ghclient     *github.Client
 	githubToLdap map[string]string
-	ldapToGithub map[string]string
 }
 
 type organization struct {
@@ -43,10 +42,9 @@ type organization struct {
 }
 
 type parameters struct {
-	Organization                organization
-	UserplexTeamName            string
-	Enforce2FA                  bool
-	UseLdapGithubAccountMapping bool
+	Organization     organization
+	UserplexTeamName string
+	Enforce2FA       bool
 }
 
 type credentials struct {
@@ -75,7 +73,8 @@ func (r *run) Run() (err error) {
 	tc := oauth2.NewClient(oauth2.NoContext, ts)
 	r.ghclient = github.NewClient(tc)
 
-	r.buildLdapMapping()
+	// initialize mapping of github usernames -> ldap uids
+	r.githubToLdap = make(map[string]string)
 	ldapers := r.getLdapers()
 
 	// get all members for the organization
@@ -223,15 +222,6 @@ func (r *run) Run() (err error) {
 	return nil
 }
 
-func (r *run) buildLdapMapping() {
-	r.githubToLdap = make(map[string]string)
-	r.ldapToGithub = make(map[string]string)
-	for _, mapping := range r.Conf.UidMap {
-		r.githubToLdap[mapping.LocalUID] = mapping.LdapUid
-		r.ldapToGithub[mapping.LdapUid] = mapping.LocalUID
-	}
-}
-
 func (r *run) getOrgMembersMap(org organization, filter string) (membersMap map[string]bool) {
 	membersMap = make(map[string]bool)
 	opt := &github.ListMembersOptions{
@@ -336,23 +326,16 @@ func (r *run) getLdapers() map[string]bool {
 			continue
 		}
 
-		if r.p.UseLdapGithubAccountMapping {
-			github, getGithubAccountErr := r.Conf.LdapCli.GetUserGithubByUID(uid)
-			if getGithubAccountErr != nil {
-				// this error can happen if the user does not have a githubProfile in ldap
-				if r.Conf.Debug {
-					log.Printf("[debug] github: ldap query GetUserGithubByUID(%q) failed with error %q", uid, getGithubAccountErr.Error())
-				}
-			} else {
-				// has a githubProfile in LDAP
-				r.githubToLdap[github] = uid
-				uid = github
+		github, getGithubAccountErr := r.Conf.LdapCli.GetUserGithubByUID(uid)
+		if getGithubAccountErr != nil {
+			// this error can happen if the user does not have a githubProfile in ldap
+			if r.Conf.Debug {
+				log.Printf("[debug] github: ldap query GetUserGithubByUID(%q) failed with error %q", uid, getGithubAccountErr.Error())
 			}
 		} else {
-			// use the uidmap
-			if _, ok := r.ldapToGithub[uid]; ok {
-				uid = r.ldapToGithub[uid]
-			}
+			// has a githubProfile in LDAP
+			r.githubToLdap[github] = uid
+			uid = github
 		}
 
 		ldapers[uid] = false
