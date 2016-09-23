@@ -80,7 +80,7 @@ imports:
 - name: go.mozilla.org/gopgagent
   version: da4f24003cbec8ef26fdd0761e40eab273a02832
 - name: go.mozilla.org/mozldap
-  version: 312718c1e6b1b13561fc30af0d0ab1a682064da9
+  version: 65efeec7e5ff3e20abada84a544f4b1cd17545bb
 - name: go.mozilla.org/sops
   version: 213242c7e7091dff2873b2ac664c7e32cf0ed8f5
   subpackages:
