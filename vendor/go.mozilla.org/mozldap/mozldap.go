@@ -349,6 +349,28 @@ func (cli *Client) GetUserUidNumber(shortdn string) (uidNumber uint64, err error
 	return
 }
 
+// GetUserGithubByUID returns the Github username of a given user using their ID
+// example: cli.GetUserGithubByUID("jvehent")
+func (cli *Client) GetUserGithubByUID(uid string) (string, error) {
+	errorText := fmt.Sprintf("mozldap.GetUserDNByUID(uid=%q)", uid)
+	githubUsername := ""
+
+	entries, err := cli.Search("", "(uid="+uid+")", []string{"githubProfile"})
+	if err != nil {
+		return "", fmt.Errorf("%s -> %q", errorText, err.Error())
+	}
+	if len(entries) != 1 {
+		return "", fmt.Errorf("%s -> found %d entries matching uid %q, expected 1", errorText, len(entries), uid)
+	}
+
+	githubUsername = entries[0].GetAttributeValue("githubProfile")
+	if githubUsername == "" {
+		return "", fmt.Errorf("%s -> could not find githubProfile for %q", errorText, uid)
+	}
+
+	return githubUsername, nil
+}
+
 // GetUserSSHPublicKeys returns a list of public keys defined in a user's sshPublicKey
 // LDAP attribute. If no public key is found, the list is empty.
 //
