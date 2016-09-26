@@ -113,7 +113,15 @@ func (r *run) Run() (err error) {
 	membershipType := "member"
 
 	countAdded := 0
+
+userloop:
 	for user := range ldapers {
+		_, resp, err = r.ghclient.Users.Get(user)
+		if err != nil || resp.StatusCode != 200 {
+			log.Printf("[error] github: could not get user %s: %s, error: %v with status %s", user, r.p.Organization.Name, err, resp.Status)
+			continue
+		}
+
 		// set to true to indicate that user in github has ldap match
 		membersMap[user] = true
 
@@ -135,7 +143,8 @@ func (r *run) Run() (err error) {
 						Role: membershipType,
 					})
 					if err != nil || resp.StatusCode != 200 {
-						return fmt.Errorf("[error] github: could not add user %s to %s: %s, error: %v with status %s", user, r.p.Organization.Name, *team.Name, err, resp.Status)
+						log.Printf("[error] github: could not add user %s to %s: %s, error: %v with status %s", user, r.p.Organization.Name, *team.Name, err, resp.Status)
+						continue userloop
 					}
 				}
 				if r.Conf.Create {
