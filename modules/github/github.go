@@ -174,7 +174,7 @@ func (r *run) Run() (err error) {
 		_, no2fa := no2fa[member]
 
 		// if the user is in ldap
-		_, inLdap := membersMap[member]
+		inLdap, _ := membersMap[member]
 
 		// if the member is not in the userplex team
 		_, isUserplexed := userplexedUsers[member]
@@ -235,7 +235,8 @@ func (r *run) getOrgMembersMap(org organization, filter string) (membersMap map[
 			return
 		}
 		for _, member := range members {
-			membersMap[*member.Login] = false
+			memberName := strings.ToLower(*member.Login)
+			membersMap[memberName] = false
 		}
 		if resp.NextPage == 0 {
 			break
@@ -259,7 +260,8 @@ func (r *run) getTeamMembersMap(team *github.Team) (membersMap map[string]bool) 
 			return
 		}
 		for _, member := range members {
-			membersMap[*member.Login] = false
+			memberName := strings.ToLower(*member.Login)
+			membersMap[memberName] = false
 		}
 		if resp.NextPage == 0 {
 			break
@@ -281,7 +283,8 @@ func (r *run) getOrgTeamsMap(org organization) (teamsMap map[string]*github.Team
 			return
 		}
 		for _, team := range teams {
-			teamsMap[*team.Name] = team
+			teamName := strings.ToLower(*team.Name)
+			teamsMap[teamName] = team
 		}
 		if resp.NextPage == 0 {
 			break
@@ -337,7 +340,7 @@ func (r *run) getLdapers() map[string]bool {
 			r.githubToLdap[github] = uid
 			uid = github
 		}
-
+		uid = strings.ToLower(uid)
 		ldapers[uid] = false
 	}
 	return ldapers
