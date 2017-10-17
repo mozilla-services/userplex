@@ -13,8 +13,8 @@ dev: lint cyclo all
 userplex:
 	$(GO) install $(PROJECT)
 
-go_vendor_dependencies:
-	glide install
+vendor:
+	govend -u
 
 test:
 	$(GO) test $(PROJECT)/modules/...
@@ -33,4 +33,4 @@ generate:
 cyclo:
 	gocyclo -over 15 *.go modules/
 
-.PHONY: all test clean userplex
+.PHONY: all test clean userplex vendor
