@@ -20,13 +20,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 const (
@@ -36,7 +35,7 @@ const (
 
 	// Maximum allowed depth when recursively substituing variable names.
 	_DEPTH_VALUES = 99
-	_VERSION      = "1.19.1"
+	_VERSION      = "1.30.0"
 )
 
 // Version returns current package version literal.
@@ -59,6 +58,9 @@ var (
 
 	// Explicitly write DEFAULT section header
 	DefaultHeader = false
+
+	// Indicate whether to put a line between sections
+	PrettySection = true
 )
 
 func init() {
@@ -108,7 +110,16 @@ type sourceData struct {
 }
 
 func (s *sourceData) ReadCloser() (io.ReadCloser, error) {
-	return &bytesReadCloser{bytes.NewReader(s.data)}, nil
+	return ioutil.NopCloser(bytes.NewReader(s.data)), nil
+}
+
+// sourceReadCloser represents an input stream with Close method.
+type sourceReadCloser struct {
+	reader io.ReadCloser
+}
+
+func (s *sourceReadCloser) ReadCloser() (io.ReadCloser, error) {
+	return s.reader, nil
 }
 
 // File represents a combination of a or more INI file(s) in memory.
@@ -129,6 +140,7 @@ type File struct {
 	options LoadOptions
 
 	NameMapper
+	ValueMapper
 }
 
 // newFile initializes File object with given data sources.
@@ -148,6 +160,8 @@ func parseDataSource(source interface{}) (dataSource, error) {
 		return sourceFile{s}, nil
 	case []byte:
 		return &sourceData{s}, nil
+	case io.ReadCloser:
+		return &sourceReadCloser{s}, nil
 	default:
 		return nil, fmt.Errorf("error parsing data source: unknown type '%s'", s)
 	}
@@ -160,6 +174,18 @@ type LoadOptions struct {
 	Insensitive bool
 	// IgnoreContinuation indicates whether to ignore continuation lines while parsing.
 	IgnoreContinuation bool
+	// IgnoreInlineComment indicates whether to ignore comments at the end of value and treat it as part of value.
+	IgnoreInlineComment bool
+	// AllowBooleanKeys indicates whether to allow boolean type keys or treat as value is missing.
+	// This type of keys are mostly used in my.cnf.
+	AllowBooleanKeys bool
+	// AllowShadows indicates whether to keep track of keys with same name under same section.
+	AllowShadows bool
+	// UnescapeValueDoubleQuotes indicates whether to unescape double quotes inside value to regular format when value is surrounded by double quotes, e.g. key="a \"value\"" => key=a "value"
+	UnescapeValueDoubleQuotes bool
+	// Some INI formats allow group blocks that store a block of raw content that doesn't otherwise
+	// conform to key/value pairs. Specify the names of those blocks here.
+	UnparseableSections []string
 }
 
 func LoadSources(opts LoadOptions, source interface{}, others ...interface{}) (_ *File, err error) {
@@ -200,6 +226,12 @@ func InsensitiveLoad(source interface{}, others ...interface{}) (*File, error) {
 	return LoadSources(LoadOptions{Insensitive: true}, source, others...)
 }
 
+// InsensitiveLoad has exactly same functionality as Load function
+// except it allows have shadow keys.
+func ShadowLoad(source interface{}, others ...interface{}) (*File, error) {
+	return LoadSources(LoadOptions{AllowShadows: true}, source, others...)
+}
+
 // Empty returns an empty file object.
 func Empty() *File {
 	// Ignore error here, we sure our data is good.
@@ -227,6 +259,18 @@ func (f *File) NewSection(name string) (*Section, error) {
 	f.sectionList = append(f.sectionList, name)
 	f.sections[name] = newSection(f, name)
 	return f.sections[name], nil
+}
+
+// NewRawSection creates a new section with an unparseable body.
+func (f *File) NewRawSection(name, body string) (*Section, error) {
+	section, err := f.NewSection(name)
+	if err != nil {
+		return nil, err
+	}
+
+	section.isRawSection = true
+	section.rawBody = body
+	return section, nil
 }
 
 // NewSections creates a list of sections.
@@ -278,6 +322,11 @@ func (f *File) Sections() []*Section {
 		sections[i] = f.Section(f.sectionList[i])
 	}
 	return sections
+}
+
+// ChildSections returns a list of child sections of given section name.
+func (f *File) ChildSections(name string) []*Section {
+	return f.Section(name).ChildSections()
 }
 
 // SectionStrings returns list of section names.
@@ -349,10 +398,7 @@ func (f *File) Append(source interface{}, others ...interface{}) error {
 	return f.Reload()
 }
 
-// WriteToIndent writes content into io.Writer with given indention.
-// If PrettyFormat has been set to be true,
-// it will align "=" sign with spaces under each section.
-func (f *File) WriteToIndent(w io.Writer, indent string) (n int64, err error) {
+func (f *File) writeToBuffer(indent string) (*bytes.Buffer, error) {
 	equalSign := "="
 	if PrettyFormat {
 		equalSign = " = "
@@ -365,21 +411,30 @@ func (f *File) WriteToIndent(w io.Writer, indent string) (n int64, err error) {
 		if len(sec.Comment) > 0 {
 			if sec.Comment[0] != '#' && sec.Comment[0] != ';' {
 				sec.Comment = "; " + sec.Comment
+			} else {
+				sec.Comment = sec.Comment[:1] + " " + strings.TrimSpace(sec.Comment[1:])
 			}
-			if _, err = buf.WriteString(sec.Comment + LineBreak); err != nil {
-				return 0, err
+			if _, err := buf.WriteString(sec.Comment + LineBreak); err != nil {
+				return nil, err
 			}
 		}
 
 		if i > 0 || DefaultHeader {
-			if _, err = buf.WriteString("[" + sname + "]" + LineBreak); err != nil {
-				return 0, err
+			if _, err := buf.WriteString("[" + sname + "]" + LineBreak); err != nil {
+				return nil, err
 			}
 		} else {
 			// Write nothing if default section is empty
 			if len(sec.keyList) == 0 {
 				continue
 			}
+		}
+
+		if sec.isRawSection {
+			if _, err := buf.WriteString(sec.rawBody); err != nil {
+				return nil, err
+			}
+			continue
 		}
 
 		// Count and generate alignment length and buffer spaces using the
@@ -403,6 +458,7 @@ func (f *File) WriteToIndent(w io.Writer, indent string) (n int64, err error) {
 		}
 		alignSpaces := bytes.Repeat([]byte(" "), alignLength)
 
+	KEY_LIST:
 		for _, kname := range sec.keyList {
 			key := sec.Key(kname)
 			if len(key.Comment) > 0 {
@@ -411,9 +467,11 @@ func (f *File) WriteToIndent(w io.Writer, indent string) (n int64, err error) {
 				}
 				if key.Comment[0] != '#' && key.Comment[0] != ';' {
 					key.Comment = "; " + key.Comment
+				} else {
+					key.Comment = key.Comment[:1] + " " + strings.TrimSpace(key.Comment[1:])
 				}
-				if _, err = buf.WriteString(key.Comment + LineBreak); err != nil {
-					return 0, err
+				if _, err := buf.WriteString(key.Comment + LineBreak); err != nil {
+					return nil, err
 				}
 			}
 
@@ -422,40 +480,62 @@ func (f *File) WriteToIndent(w io.Writer, indent string) (n int64, err error) {
 			}
 
 			switch {
-			case key.isAutoIncr:
+			case key.isAutoIncrement:
 				kname = "-"
 			case strings.ContainsAny(kname, "\"=:"):
 				kname = "`" + kname + "`"
 			case strings.Contains(kname, "`"):
 				kname = `"""` + kname + `"""`
 			}
-			if _, err = buf.WriteString(kname); err != nil {
-				return 0, err
-			}
 
-			// Write out alignment spaces before "=" sign
-			if PrettyFormat {
-				buf.Write(alignSpaces[:alignLength-len(kname)])
-			}
+			for _, val := range key.ValueWithShadows() {
+				if _, err := buf.WriteString(kname); err != nil {
+					return nil, err
+				}
 
-			val := key.value
-			// In case key value contains "\n", "`", "\"", "#" or ";"
-			if strings.ContainsAny(val, "\n`") {
-				val = `"""` + val + `"""`
-			} else if strings.ContainsAny(val, "#;") {
-				val = "`" + val + "`"
-			}
-			if _, err = buf.WriteString(equalSign + val + LineBreak); err != nil {
-				return 0, err
+				if key.isBooleanType {
+					if kname != sec.keyList[len(sec.keyList)-1] {
+						buf.WriteString(LineBreak)
+					}
+					continue KEY_LIST
+				}
+
+				// Write out alignment spaces before "=" sign
+				if PrettyFormat {
+					buf.Write(alignSpaces[:alignLength-len(kname)])
+				}
+
+				// In case key value contains "\n", "`", "\"", "#" or ";"
+				if strings.ContainsAny(val, "\n`") {
+					val = `"""` + val + `"""`
+				} else if !f.options.IgnoreInlineComment && strings.ContainsAny(val, "#;") {
+					val = "`" + val + "`"
+				}
+				if _, err := buf.WriteString(equalSign + val + LineBreak); err != nil {
+					return nil, err
+				}
 			}
 		}
 
-		// Put a line between sections
-		if _, err = buf.WriteString(LineBreak); err != nil {
-			return 0, err
+		if PrettySection {
+			// Put a line between sections
+			if _, err := buf.WriteString(LineBreak); err != nil {
+				return nil, err
+			}
 		}
 	}
 
+	return buf, nil
+}
+
+// WriteToIndent writes content into io.Writer with given indention.
+// If PrettyFormat has been set to be true,
+// it will align "=" sign with spaces under each section.
+func (f *File) WriteToIndent(w io.Writer, indent string) (int64, error) {
+	buf, err := f.writeToBuffer(indent)
+	if err != nil {
+		return 0, err
+	}
 	return buf.WriteTo(w)
 }
 
@@ -468,23 +548,12 @@ func (f *File) WriteTo(w io.Writer) (int64, error) {
 func (f *File) SaveToIndent(filename, indent string) error {
 	// Note: Because we are truncating with os.Create,
 	// 	so it's safer to save to a temporary file location and rename afte done.
-	tmpPath := filename + "." + strconv.Itoa(time.Now().Nanosecond()) + ".tmp"
-	defer os.Remove(tmpPath)
-
-	fw, err := os.Create(tmpPath)
+	buf, err := f.writeToBuffer(indent)
 	if err != nil {
 		return err
 	}
 
-	if _, err = f.WriteToIndent(fw, indent); err != nil {
-		fw.Close()
-		return err
-	}
-	fw.Close()
-
-	// Remove old file and rename the new one.
-	os.Remove(filename)
-	return os.Rename(tmpPath, filename)
+	return ioutil.WriteFile(filename, buf.Bytes(), 0666)
 }
 
 // SaveTo writes content to file system.

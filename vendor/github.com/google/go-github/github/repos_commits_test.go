@@ -6,6 +6,7 @@
 package github
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -20,6 +21,7 @@ func TestRepositoriesService_ListCommits(t *testing.T) {
 	// given
 	mux.HandleFunc("/repos/o/r/commits", func(w http.ResponseWriter, r *http.Request) {
 		testMethod(t, r, "GET")
+		testHeader(t, r, "Accept", mediaTypeGitSigningPreview)
 		testFormValues(t, r,
 			values{
 				"sha":    "s",
@@ -38,7 +40,7 @@ func TestRepositoriesService_ListCommits(t *testing.T) {
 		Since:  time.Date(2013, time.August, 1, 0, 0, 0, 0, time.UTC),
 		Until:  time.Date(2013, time.September, 3, 0, 0, 0, 0, time.UTC),
 	}
-	commits, _, err := client.Repositories.ListCommits("o", "r", opt)
+	commits, _, err := client.Repositories.ListCommits(context.Background(), "o", "r", opt)
 	if err != nil {
 		t.Errorf("Repositories.ListCommits returned error: %v", err)
 	}
@@ -70,15 +72,16 @@ func TestRepositoriesService_GetCommit(t *testing.T) {
 		      "deletions": 2,
 		      "changes": 12,
 		      "status": "s",
-		      "raw_url": "r",
+		      "patch": "p",
 		      "blob_url": "b",
-		      "patch": "p"
+		      "raw_url": "r",
+		      "contents_url": "c"
 		    }
 		  ]
 		}`)
 	})
 
-	commit, _, err := client.Repositories.GetCommit("o", "r", "s")
+	commit, _, err := client.Repositories.GetCommit(context.Background(), "o", "r", "s")
 	if err != nil {
 		t.Errorf("Repositories.GetCommit returned error: %v", err)
 	}
@@ -106,12 +109,15 @@ func TestRepositoriesService_GetCommit(t *testing.T) {
 		},
 		Files: []CommitFile{
 			{
-				Filename:  String("f"),
-				Additions: Int(10),
-				Deletions: Int(2),
-				Changes:   Int(12),
-				Status:    String("s"),
-				Patch:     String("p"),
+				Filename:    String("f"),
+				Additions:   Int(10),
+				Deletions:   Int(2),
+				Changes:     Int(12),
+				Status:      String("s"),
+				Patch:       String("p"),
+				BlobURL:     String("b"),
+				RawURL:      String("r"),
+				ContentsURL: String("c"),
 			},
 		},
 	}
@@ -132,7 +138,7 @@ func TestRepositoriesService_GetCommitSHA1(t *testing.T) {
 		fmt.Fprintf(w, sha1)
 	})
 
-	got, _, err := client.Repositories.GetCommitSHA1("o", "r", "master", "")
+	got, _, err := client.Repositories.GetCommitSHA1(context.Background(), "o", "r", "master", "")
 	if err != nil {
 		t.Errorf("Repositories.GetCommitSHA1 returned error: %v", err)
 	}
@@ -150,7 +156,7 @@ func TestRepositoriesService_GetCommitSHA1(t *testing.T) {
 		w.WriteHeader(http.StatusNotModified)
 	})
 
-	got, _, err = client.Repositories.GetCommitSHA1("o", "r", "tag", sha1)
+	got, _, err = client.Repositories.GetCommitSHA1(context.Background(), "o", "r", "tag", sha1)
 	if err == nil {
 		t.Errorf("Expected HTTP 304 response")
 	}
@@ -176,7 +182,7 @@ func TestRepositoriesService_CompareCommits(t *testing.T) {
 		      "message": "m",
 		      "tree": { "sha": "t" }
 		    },
-		    "author": { "login": "n" },
+		    "author": { "login": "l" },
 		    "committer": { "login": "l" },
 		    "parents": [ { "sha": "s" } ]
 		  },
@@ -193,31 +199,54 @@ func TestRepositoriesService_CompareCommits(t *testing.T) {
 		      "parents": [ { "sha": "s" } ]
 		    }
 		  ],
-		  "files": [ { "filename": "f" } ]
+		  "files": [ { "filename": "f" } ],
+		  "html_url":      "https://github.com/o/r/compare/b...h",
+		  "permalink_url": "https://github.com/o/r/compare/o:bbcd538c8e72b8c175046e27cc8f907076331401...o:0328041d1152db8ae77652d1618a02e57f745f17",
+		  "diff_url":      "https://github.com/o/r/compare/b...h.diff",
+		  "patch_url":     "https://github.com/o/r/compare/b...h.patch",
+		  "url":           "https://api.github.com/repos/o/r/compare/b...h"
 		}`)
 	})
 
-	got, _, err := client.Repositories.CompareCommits("o", "r", "b", "h")
+	got, _, err := client.Repositories.CompareCommits(context.Background(), "o", "r", "b", "h")
 	if err != nil {
 		t.Errorf("Repositories.CompareCommits returned error: %v", err)
 	}
 
 	want := &CommitsComparison{
+		BaseCommit: &RepositoryCommit{
+			SHA: String("s"),
+			Commit: &Commit{
+				Author:    &CommitAuthor{Name: String("n")},
+				Committer: &CommitAuthor{Name: String("n")},
+				Message:   String("m"),
+				Tree:      &Tree{SHA: String("t")},
+			},
+			Author:    &User{Login: String("l")},
+			Committer: &User{Login: String("l")},
+			Parents: []Commit{
+				{
+					SHA: String("s"),
+				},
+			},
+		},
 		Status:       String("s"),
 		AheadBy:      Int(1),
 		BehindBy:     Int(2),
 		TotalCommits: Int(1),
-		BaseCommit: &RepositoryCommit{
-			Commit: &Commit{
-				Author: &CommitAuthor{Name: String("n")},
-			},
-			Author:    &User{Login: String("l")},
-			Committer: &User{Login: String("l")},
-			Message:   String("m"),
-		},
 		Commits: []RepositoryCommit{
 			{
 				SHA: String("s"),
+				Commit: &Commit{
+					Author: &CommitAuthor{Name: String("n")},
+				},
+				Author:    &User{Login: String("l")},
+				Committer: &User{Login: String("l")},
+				Parents: []Commit{
+					{
+						SHA: String("s"),
+					},
+				},
 			},
 		},
 		Files: []CommitFile{
@@ -225,9 +254,14 @@ func TestRepositoriesService_CompareCommits(t *testing.T) {
 				Filename: String("f"),
 			},
 		},
+		HTMLURL:      String("https://github.com/o/r/compare/b...h"),
+		PermalinkURL: String("https://github.com/o/r/compare/o:bbcd538c8e72b8c175046e27cc8f907076331401...o:0328041d1152db8ae77652d1618a02e57f745f17"),
+		DiffURL:      String("https://github.com/o/r/compare/b...h.diff"),
+		PatchURL:     String("https://github.com/o/r/compare/b...h.patch"),
+		URL:          String("https://api.github.com/repos/o/r/compare/b...h"),
 	}
 
-	if reflect.DeepEqual(got, want) {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Repositories.CompareCommits returned \n%+v, want \n%+v", got, want)
 	}
 }

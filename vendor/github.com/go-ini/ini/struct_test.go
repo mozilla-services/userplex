@@ -51,6 +51,9 @@ type testStruct struct {
 	*testEmbeded `ini:"grade"`
 	Unused       int `ini:"-"`
 	Unsigned     uint
+	Omitted      bool     `ini:"omitthis,omitempty"`
+	Shadows      []string `ini:",,allowshadow"`
+	ShadowInts   []int    `ini:"Shadows,,allowshadow"`
 }
 
 const _CONF_DATA_STRUCT = `
@@ -61,6 +64,9 @@ Money = 1.25
 Born = 1993-10-07T20:17:05Z
 Duration = 2h45m
 Unsigned = 3
+omitthis = true
+Shadows = 1, 2
+Shadows = 3, 4
 
 [Others]
 Cities = HangZhou|Boston
@@ -185,6 +191,23 @@ func Test_Struct(t *testing.T) {
 			So(cfg.MapTo(&unsupport4{}), ShouldNotBeNil)
 		})
 
+		Convey("Map to omitempty field", func() {
+			ts := new(testStruct)
+			So(MapTo(ts, []byte(_CONF_DATA_STRUCT)), ShouldBeNil)
+
+			So(ts.Omitted, ShouldEqual, true)
+		})
+
+		Convey("Map with shadows", func() {
+			cfg, err := LoadSources(LoadOptions{AllowShadows: true}, []byte(_CONF_DATA_STRUCT))
+			So(err, ShouldBeNil)
+			ts := new(testStruct)
+			So(cfg.MapTo(ts), ShouldBeNil)
+
+			So(strings.Join(ts.Shadows, " "), ShouldEqual, "1 2 3 4")
+			So(fmt.Sprintf("%v", ts.ShadowInts), ShouldEqual, "[1 2 3 4]")
+		})
+
 		Convey("Map from invalid data source", func() {
 			So(MapTo(&testStruct{}, "hi"), ShouldNotBeNil)
 		})
@@ -206,9 +229,38 @@ func Test_Struct(t *testing.T) {
 		})
 	})
 
+	Convey("Map to struct in strict mode", t, func() {
+		cfg, err := Load([]byte(`
+name=bruce
+age=a30`))
+		So(err, ShouldBeNil)
+
+		type Strict struct {
+			Name string `ini:"name"`
+			Age  int    `ini:"age"`
+		}
+		s := new(Strict)
+
+		So(cfg.Section("").StrictMapTo(s), ShouldNotBeNil)
+	})
+
+	Convey("Map slice in strict mode", t, func() {
+		cfg, err := Load([]byte(`
+names=alice, bruce`))
+		So(err, ShouldBeNil)
+
+		type Strict struct {
+			Names []string `ini:"names"`
+		}
+		s := new(Strict)
+
+		So(cfg.Section("").StrictMapTo(s), ShouldBeNil)
+		So(fmt.Sprint(s.Names), ShouldEqual, "[alice bruce]")
+	})
+
 	Convey("Reflect from struct", t, func() {
 		type Embeded struct {
-			Dates       []time.Time `delim:"|"`
+			Dates       []time.Time `delim:"|" comment:"Time data"`
 			Places      []string
 			Years       []int
 			Numbers     []int64
@@ -220,12 +272,12 @@ func Test_Struct(t *testing.T) {
 		type Author struct {
 			Name      string `ini:"NAME"`
 			Male      bool
-			Age       int
+			Age       int `comment:"Author's age"`
 			Height    uint
 			GPA       float64
 			Date      time.Time
 			NeverMind string `ini:"-"`
-			*Embeded  `ini:"infos"`
+			*Embeded  `ini:"infos" comment:"Embeded section"`
 		}
 
 		t, err := time.Parse(time.RFC3339, "1993-10-07T20:17:05Z")
@@ -249,12 +301,15 @@ func Test_Struct(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(buf.String(), ShouldEqual, `NAME   = Unknwon
 Male   = true
+; Author's age
 Age    = 21
 Height = 100
 GPA    = 2.8
 Date   = 1993-10-07T20:17:05Z
 
+; Embeded section
 [infos]
+; Time data
 Dates       = 1993-10-07T20:17:05Z|1993-10-07T20:17:05Z
 Places      = HangZhou,Boston
 Years       = 1993,1994

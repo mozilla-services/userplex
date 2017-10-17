@@ -1,4 +1,4 @@
-# go-pgerduty
+# go-pagerduty
 
 go-pagerduty is a CLI and [go](https://golang.org/) client library for [PagerDuty v2 API](https://v2.developer.pagerduty.com/v2/page/api-reference).
 [godoc](http://godoc.org/github.com/PagerDuty/go-pagerduty)
@@ -12,6 +12,29 @@ go get github.com/PagerDuty/go-pagerduty
 ## Usage
 
 ### CLI
+
+The CLI requires authentication token, which can be sepcified in `.pd.yml`
+file in home directory of the user, or passed as command line argument.
+Example of config file:
+
+```yaml
+---
+authtoken: fooBar
+```
+
+`pd` command provides a single entrypoint for all the API endpoints, with individual
+API represented by their own sub commands. For an exhaustive list of sub-commands, try:
+
+```
+pd --help
+```
+
+An example of the `service` sub-command
+
+```
+pd service list
+```
+
 
 ### From golang libraries
 

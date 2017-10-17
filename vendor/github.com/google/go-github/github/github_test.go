@@ -7,6 +7,7 @@ package github
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -32,17 +33,39 @@ var (
 	server *httptest.Server
 )
 
+const (
+	// baseURLPath is a non-empty Client.BaseURL path to use during tests,
+	// to ensure relative URLs are used for all endpoints. See issue #752.
+	baseURLPath = "/api-v3"
+)
+
 // setup sets up a test HTTP server along with a github.Client that is
-// configured to talk to that test server.  Tests should register handlers on
+// configured to talk to that test server. Tests should register handlers on
 // mux which provide mock responses for the API method being tested.
 func setup() {
 	// test server
 	mux = http.NewServeMux()
-	server = httptest.NewServer(mux)
+
+	// We want to ensure that tests catch mistakes where the endpoint URL is
+	// specified as absolute rather than relative. It only makes a difference
+	// when there's a non-empty base URL path. So, use that. See issue #752.
+	apiHandler := http.NewServeMux()
+	apiHandler.Handle(baseURLPath+"/", http.StripPrefix(baseURLPath, mux))
+	apiHandler.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		fmt.Fprintln(os.Stderr, "FAIL: Client.BaseURL path prefix is not preserved in the request URL:")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "\t"+req.URL.String())
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "\tDid you accidentally use an absolute endpoint URL rather than relative?")
+		fmt.Fprintln(os.Stderr, "\tSee https://github.com/google/go-github/issues/752 for information.")
+		http.Error(w, "Client.BaseURL path prefix is not preserved in the request URL.", http.StatusInternalServerError)
+	})
+
+	server = httptest.NewServer(apiHandler)
 
 	// github client configured to use test server
 	client = NewClient(nil)
-	url, _ := url.Parse(server.URL)
+	url, _ := url.Parse(server.URL + baseURLPath + "/")
 	client.BaseURL = url
 	client.UploadURL = url
 }
@@ -54,7 +77,7 @@ func teardown() {
 
 // openTestFile creates a new file with the given name and content for testing.
 // In order to ensure the exact file name, this function will create a new temp
-// directory, and create the file in that directory.  It is the caller's
+// directory, and create the file in that directory. It is the caller's
 // responsibility to remove the directory and its contents when no longer needed.
 func openTestFile(name, content string) (file *os.File, dir string, err error) {
 	dir, err = ioutil.TempDir("", "go-github")
@@ -90,7 +113,7 @@ type values map[string]string
 func testFormValues(t *testing.T, r *http.Request, values values) {
 	want := url.Values{}
 	for k, v := range values {
-		want.Add(k, v)
+		want.Set(k, v)
 	}
 
 	r.ParseForm()
@@ -200,7 +223,7 @@ func TestNewRequest_invalidJSON(t *testing.T) {
 	type T struct {
 		A map[interface{}]interface{}
 	}
-	_, err := c.NewRequest("GET", "/", &T{})
+	_, err := c.NewRequest("GET", ".", &T{})
 
 	if err == nil {
 		t.Error("Expected error to be returned.")
@@ -221,7 +244,7 @@ func TestNewRequest_badURL(t *testing.T) {
 func TestNewRequest_emptyUserAgent(t *testing.T) {
 	c := NewClient(nil)
 	c.UserAgent = ""
-	req, err := c.NewRequest("GET", "/", nil)
+	req, err := c.NewRequest("GET", ".", nil)
 	if err != nil {
 		t.Fatalf("NewRequest returned unexpected error: %v", err)
 	}
@@ -231,19 +254,65 @@ func TestNewRequest_emptyUserAgent(t *testing.T) {
 }
 
 // If a nil body is passed to github.NewRequest, make sure that nil is also
-// passed to http.NewRequest.  In most cases, passing an io.Reader that returns
+// passed to http.NewRequest. In most cases, passing an io.Reader that returns
 // no content is fine, since there is no difference between an HTTP request
-// body that is an empty string versus one that is not set at all.  However in
+// body that is an empty string versus one that is not set at all. However in
 // certain cases, intermediate systems may treat these differently resulting in
 // subtle errors.
 func TestNewRequest_emptyBody(t *testing.T) {
 	c := NewClient(nil)
-	req, err := c.NewRequest("GET", "/", nil)
+	req, err := c.NewRequest("GET", ".", nil)
 	if err != nil {
 		t.Fatalf("NewRequest returned unexpected error: %v", err)
 	}
 	if req.Body != nil {
 		t.Fatalf("constructed request contains a non-nil Body")
+	}
+}
+
+func TestNewRequest_errorForNoTrailingSlash(t *testing.T) {
+	tests := []struct {
+		rawurl    string
+		wantError bool
+	}{
+		{rawurl: "https://example.com/api/v3", wantError: true},
+		{rawurl: "https://example.com/api/v3/", wantError: false},
+	}
+	c := NewClient(nil)
+	for _, test := range tests {
+		u, err := url.Parse(test.rawurl)
+		if err != nil {
+			t.Fatalf("url.Parse returned unexpected error: %v.", err)
+		}
+		c.BaseURL = u
+		if _, err := c.NewRequest(http.MethodGet, "test", nil); test.wantError && err == nil {
+			t.Fatalf("Expected error to be returned.")
+		} else if !test.wantError && err != nil {
+			t.Fatalf("NewRequest returned unexpected error: %v.", err)
+		}
+	}
+}
+
+func TestNewUploadRequest_errorForNoTrailingSlash(t *testing.T) {
+	tests := []struct {
+		rawurl    string
+		wantError bool
+	}{
+		{rawurl: "https://example.com/api/uploads", wantError: true},
+		{rawurl: "https://example.com/api/uploads/", wantError: false},
+	}
+	c := NewClient(nil)
+	for _, test := range tests {
+		u, err := url.Parse(test.rawurl)
+		if err != nil {
+			t.Fatalf("url.Parse returned unexpected error: %v.", err)
+		}
+		c.UploadURL = u
+		if _, err = c.NewUploadRequest("test", nil, 0, ""); test.wantError && err == nil {
+			t.Fatalf("Expected error to be returned.")
+		} else if !test.wantError && err != nil {
+			t.Fatalf("NewUploadRequest returned unexpected error: %v.", err)
+		}
 	}
 }
 
@@ -327,9 +396,9 @@ func TestDo(t *testing.T) {
 		fmt.Fprint(w, `{"A":"a"}`)
 	})
 
-	req, _ := client.NewRequest("GET", "/", nil)
+	req, _ := client.NewRequest("GET", ".", nil)
 	body := new(foo)
-	client.Do(req, body)
+	client.Do(context.Background(), req, body)
 
 	want := &foo{"a"}
 	if !reflect.DeepEqual(body, want) {
@@ -345,27 +414,30 @@ func TestDo_httpError(t *testing.T) {
 		http.Error(w, "Bad Request", 400)
 	})
 
-	req, _ := client.NewRequest("GET", "/", nil)
-	_, err := client.Do(req, nil)
+	req, _ := client.NewRequest("GET", ".", nil)
+	resp, err := client.Do(context.Background(), req, nil)
 
 	if err == nil {
-		t.Error("Expected HTTP 400 error.")
+		t.Fatal("Expected HTTP 400 error, got no error.")
+	}
+	if resp.StatusCode != 400 {
+		t.Errorf("Expected HTTP 400 error, got %d status code.", resp.StatusCode)
 	}
 }
 
 // Test handling of an error caused by the internal http client's Do()
-// function.  A redirect loop is pretty unlikely to occur within the GitHub
+// function. A redirect loop is pretty unlikely to occur within the GitHub
 // API, but does allow us to exercise the right code path.
 func TestDo_redirectLoop(t *testing.T) {
 	setup()
 	defer teardown()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/", http.StatusFound)
+		http.Redirect(w, r, baseURLPath, http.StatusFound)
 	})
 
-	req, _ := client.NewRequest("GET", "/", nil)
-	_, err := client.Do(req, nil)
+	req, _ := client.NewRequest("GET", ".", nil)
+	_, err := client.Do(context.Background(), req, nil)
 
 	if err == nil {
 		t.Error("Expected error to be returned.")
@@ -375,40 +447,52 @@ func TestDo_redirectLoop(t *testing.T) {
 	}
 }
 
+// Test that an error caused by the internal http client's Do() function
+// does not leak the client secret.
+func TestDo_sanitizeURL(t *testing.T) {
+	tp := &UnauthenticatedRateLimitedTransport{
+		ClientID:     "id",
+		ClientSecret: "secret",
+	}
+	unauthedClient := NewClient(tp.Client())
+	unauthedClient.BaseURL = &url.URL{Scheme: "http", Host: "127.0.0.1:0", Path: "/"} // Use port 0 on purpose to trigger a dial TCP error, expect to get "dial tcp 127.0.0.1:0: connect: can't assign requested address".
+	req, err := unauthedClient.NewRequest("GET", ".", nil)
+	if err != nil {
+		t.Fatalf("NewRequest returned unexpected error: %v", err)
+	}
+	_, err = unauthedClient.Do(context.Background(), req, nil)
+	if err == nil {
+		t.Fatal("Expected error to be returned.")
+	}
+	if strings.Contains(err.Error(), "client_secret=secret") {
+		t.Errorf("Do error contains secret, should be redacted:\n%q", err)
+	}
+}
+
 func TestDo_rateLimit(t *testing.T) {
 	setup()
 	defer teardown()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add(headerRateLimit, "60")
-		w.Header().Add(headerRateRemaining, "59")
-		w.Header().Add(headerRateReset, "1372700873")
+		w.Header().Set(headerRateLimit, "60")
+		w.Header().Set(headerRateRemaining, "59")
+		w.Header().Set(headerRateReset, "1372700873")
 	})
 
-	if got, want := client.Rate().Limit, 0; got != want {
-		t.Errorf("Client rate limit = %v, want %v", got, want)
-	}
-	if got, want := client.Rate().Remaining, 0; got != want {
-		t.Errorf("Client rate remaining = %v, got %v", got, want)
-	}
-	if !client.Rate().Reset.IsZero() {
-		t.Errorf("Client rate reset not initialized to zero value")
-	}
-
-	req, _ := client.NewRequest("GET", "/", nil)
-	_, err := client.Do(req, nil)
+	req, _ := client.NewRequest("GET", ".", nil)
+	resp, err := client.Do(context.Background(), req, nil)
 	if err != nil {
 		t.Errorf("Do returned unexpected error: %v", err)
 	}
-	if got, want := client.Rate().Limit, 60; got != want {
+	if got, want := resp.Rate.Limit, 60; got != want {
 		t.Errorf("Client rate limit = %v, want %v", got, want)
 	}
-	if got, want := client.Rate().Remaining, 59; got != want {
+	if got, want := resp.Rate.Remaining, 59; got != want {
 		t.Errorf("Client rate remaining = %v, want %v", got, want)
 	}
 	reset := time.Date(2013, 7, 1, 17, 47, 53, 0, time.UTC)
-	if client.Rate().Reset.UTC() != reset {
-		t.Errorf("Client rate reset = %v, want %v", client.Rate().Reset, reset)
+	if resp.Rate.Reset.UTC() != reset {
+		t.Errorf("Client rate reset = %v, want %v", resp.Rate.Reset, reset)
 	}
 }
 
@@ -418,30 +502,29 @@ func TestDo_rateLimit_errorResponse(t *testing.T) {
 	defer teardown()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add(headerRateLimit, "60")
-		w.Header().Add(headerRateRemaining, "59")
-		w.Header().Add(headerRateReset, "1372700873")
+		w.Header().Set(headerRateLimit, "60")
+		w.Header().Set(headerRateRemaining, "59")
+		w.Header().Set(headerRateReset, "1372700873")
 		http.Error(w, "Bad Request", 400)
 	})
 
-	req, _ := client.NewRequest("GET", "/", nil)
-	_, err := client.Do(req, nil)
-
+	req, _ := client.NewRequest("GET", ".", nil)
+	resp, err := client.Do(context.Background(), req, nil)
 	if err == nil {
 		t.Error("Expected error to be returned.")
 	}
 	if _, ok := err.(*RateLimitError); ok {
 		t.Errorf("Did not expect a *RateLimitError error; got %#v.", err)
 	}
-	if got, want := client.Rate().Limit, 60; got != want {
+	if got, want := resp.Rate.Limit, 60; got != want {
 		t.Errorf("Client rate limit = %v, want %v", got, want)
 	}
-	if got, want := client.Rate().Remaining, 59; got != want {
+	if got, want := resp.Rate.Remaining, 59; got != want {
 		t.Errorf("Client rate remaining = %v, want %v", got, want)
 	}
 	reset := time.Date(2013, 7, 1, 17, 47, 53, 0, time.UTC)
-	if client.Rate().Reset.UTC() != reset {
-		t.Errorf("Client rate reset = %v, want %v", client.Rate().Reset, reset)
+	if resp.Rate.Reset.UTC() != reset {
+		t.Errorf("Client rate reset = %v, want %v", resp.Rate.Reset, reset)
 	}
 }
 
@@ -451,9 +534,9 @@ func TestDo_rateLimit_rateLimitError(t *testing.T) {
 	defer teardown()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add(headerRateLimit, "60")
-		w.Header().Add(headerRateRemaining, "0")
-		w.Header().Add(headerRateReset, "1372700873")
+		w.Header().Set(headerRateLimit, "60")
+		w.Header().Set(headerRateRemaining, "0")
+		w.Header().Set(headerRateReset, "1372700873")
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		fmt.Fprintln(w, `{
@@ -462,8 +545,8 @@ func TestDo_rateLimit_rateLimitError(t *testing.T) {
 }`)
 	})
 
-	req, _ := client.NewRequest("GET", "/", nil)
-	_, err := client.Do(req, nil)
+	req, _ := client.NewRequest("GET", ".", nil)
+	_, err := client.Do(context.Background(), req, nil)
 
 	if err == nil {
 		t.Error("Expected error to be returned.")
@@ -489,12 +572,12 @@ func TestDo_rateLimit_noNetworkCall(t *testing.T) {
 	setup()
 	defer teardown()
 
-	reset := time.Now().UTC().Round(time.Second).Add(time.Minute) // Rate reset is a minute from now, with 1 second precision.
+	reset := time.Now().UTC().Add(time.Minute).Round(time.Second) // Rate reset is a minute from now, with 1 second precision.
 
 	mux.HandleFunc("/first", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add(headerRateLimit, "60")
-		w.Header().Add(headerRateRemaining, "0")
-		w.Header().Add(headerRateReset, fmt.Sprint(reset.Unix()))
+		w.Header().Set(headerRateLimit, "60")
+		w.Header().Set(headerRateRemaining, "0")
+		w.Header().Set(headerRateReset, fmt.Sprint(reset.Unix()))
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		fmt.Fprintln(w, `{
@@ -509,12 +592,12 @@ func TestDo_rateLimit_noNetworkCall(t *testing.T) {
 	})
 
 	// First request is made, and it makes the client aware of rate reset time being in the future.
-	req, _ := client.NewRequest("GET", "/first", nil)
-	client.Do(req, nil)
+	req, _ := client.NewRequest("GET", "first", nil)
+	client.Do(context.Background(), req, nil)
 
 	// Second request should not cause a network call to be made, since client can predict a rate limit error.
-	req, _ = client.NewRequest("GET", "/second", nil)
-	_, err := client.Do(req, nil)
+	req, _ = client.NewRequest("GET", "second", nil)
+	_, err := client.Do(context.Background(), req, nil)
 
 	if madeNetworkCall {
 		t.Fatal("Network call was made, even though rate limit is known to still be exceeded.")
@@ -538,6 +621,71 @@ func TestDo_rateLimit_noNetworkCall(t *testing.T) {
 	}
 }
 
+// Ensure *AbuseRateLimitError is returned when the response indicates that
+// the client has triggered an abuse detection mechanism.
+func TestDo_rateLimit_abuseRateLimitError(t *testing.T) {
+	setup()
+	defer teardown()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusForbidden)
+		// When the abuse rate limit error is of the "temporarily blocked from content creation" type,
+		// there is no "Retry-After" header.
+		fmt.Fprintln(w, `{
+   "message": "You have triggered an abuse detection mechanism and have been temporarily blocked from content creation. Please retry your request again later.",
+   "documentation_url": "https://developer.github.com/v3#abuse-rate-limits"
+}`)
+	})
+
+	req, _ := client.NewRequest("GET", ".", nil)
+	_, err := client.Do(context.Background(), req, nil)
+
+	if err == nil {
+		t.Error("Expected error to be returned.")
+	}
+	abuseRateLimitErr, ok := err.(*AbuseRateLimitError)
+	if !ok {
+		t.Fatalf("Expected a *AbuseRateLimitError error; got %#v.", err)
+	}
+	if got, want := abuseRateLimitErr.RetryAfter, (*time.Duration)(nil); got != want {
+		t.Errorf("abuseRateLimitErr RetryAfter = %v, want %v", got, want)
+	}
+}
+
+// Ensure *AbuseRateLimitError.RetryAfter is parsed correctly.
+func TestDo_rateLimit_abuseRateLimitError_retryAfter(t *testing.T) {
+	setup()
+	defer teardown()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Retry-After", "123") // Retry after value of 123 seconds.
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprintln(w, `{
+   "message": "You have triggered an abuse detection mechanism ...",
+   "documentation_url": "https://developer.github.com/v3#abuse-rate-limits"
+}`)
+	})
+
+	req, _ := client.NewRequest("GET", ".", nil)
+	_, err := client.Do(context.Background(), req, nil)
+
+	if err == nil {
+		t.Error("Expected error to be returned.")
+	}
+	abuseRateLimitErr, ok := err.(*AbuseRateLimitError)
+	if !ok {
+		t.Fatalf("Expected a *AbuseRateLimitError error; got %#v.", err)
+	}
+	if abuseRateLimitErr.RetryAfter == nil {
+		t.Fatalf("abuseRateLimitErr RetryAfter is nil, expected not-nil")
+	}
+	if got, want := *abuseRateLimitErr.RetryAfter, 123*time.Second; got != want {
+		t.Errorf("abuseRateLimitErr RetryAfter = %v, want %v", got, want)
+	}
+}
+
 func TestDo_noContent(t *testing.T) {
 	setup()
 	defer teardown()
@@ -548,8 +696,8 @@ func TestDo_noContent(t *testing.T) {
 
 	var body json.RawMessage
 
-	req, _ := client.NewRequest("GET", "/", nil)
-	_, err := client.Do(req, &body)
+	req, _ := client.NewRequest("GET", ".", nil)
+	_, err := client.Do(context.Background(), req, &body)
 	if err != nil {
 		t.Fatalf("Do returned unexpected error: %v", err)
 	}
@@ -677,35 +825,6 @@ func TestError_Error(t *testing.T) {
 	}
 }
 
-func TestRateLimit(t *testing.T) {
-	setup()
-	defer teardown()
-
-	mux.HandleFunc("/rate_limit", func(w http.ResponseWriter, r *http.Request) {
-		if m := "GET"; m != r.Method {
-			t.Errorf("Request method = %v, want %v", r.Method, m)
-		}
-		fmt.Fprint(w, `{"resources":{
-			"core": {"limit":2,"remaining":1,"reset":1372700873},
-			"search": {"limit":3,"remaining":2,"reset":1372700874}
-		}}`)
-	})
-
-	rate, _, err := client.RateLimit()
-	if err != nil {
-		t.Errorf("Rate limit returned error: %v", err)
-	}
-
-	want := &Rate{
-		Limit:     2,
-		Remaining: 1,
-		Reset:     Timestamp{time.Date(2013, 7, 1, 17, 47, 53, 0, time.UTC).Local()},
-	}
-	if !reflect.DeepEqual(rate, want) {
-		t.Errorf("RateLimit returned %+v, want %+v", rate, want)
-	}
-}
-
 func TestRateLimits(t *testing.T) {
 	setup()
 	defer teardown()
@@ -720,7 +839,7 @@ func TestRateLimits(t *testing.T) {
 		}}`)
 	})
 
-	rate, _, err := client.RateLimits()
+	rate, _, err := client.RateLimits(context.Background())
 	if err != nil {
 		t.Errorf("RateLimits returned error: %v", err)
 	}
@@ -770,8 +889,8 @@ func TestUnauthenticatedRateLimitedTransport(t *testing.T) {
 	}
 	unauthedClient := NewClient(tp.Client())
 	unauthedClient.BaseURL = client.BaseURL
-	req, _ := unauthedClient.NewRequest("GET", "/", nil)
-	unauthedClient.Do(req, nil)
+	req, _ := unauthedClient.NewRequest("GET", ".", nil)
+	unauthedClient.Do(context.Background(), req, nil)
 }
 
 func TestUnauthenticatedRateLimitedTransport_missingFields(t *testing.T) {
@@ -844,8 +963,8 @@ func TestBasicAuthTransport(t *testing.T) {
 	}
 	basicAuthClient := NewClient(tp.Client())
 	basicAuthClient.BaseURL = client.BaseURL
-	req, _ := basicAuthClient.NewRequest("GET", "/", nil)
-	basicAuthClient.Do(req, nil)
+	req, _ := basicAuthClient.NewRequest("GET", ".", nil)
+	basicAuthClient.Do(context.Background(), req, nil)
 }
 
 func TestBasicAuthTransport_transport(t *testing.T) {
@@ -861,5 +980,42 @@ func TestBasicAuthTransport_transport(t *testing.T) {
 	}
 	if tp.transport() == http.DefaultTransport {
 		t.Errorf("Expected custom transport to be used.")
+	}
+}
+
+func TestFormatRateReset(t *testing.T) {
+	d := 120*time.Minute + 12*time.Second
+	got := formatRateReset(d)
+	want := "[rate reset in 120m12s]"
+	if got != want {
+		t.Errorf("Format is wrong. got: %v, want: %v", got, want)
+	}
+
+	d = 14*time.Minute + 2*time.Second
+	got = formatRateReset(d)
+	want = "[rate reset in 14m02s]"
+	if got != want {
+		t.Errorf("Format is wrong. got: %v, want: %v", got, want)
+	}
+
+	d = 2*time.Minute + 2*time.Second
+	got = formatRateReset(d)
+	want = "[rate reset in 2m02s]"
+	if got != want {
+		t.Errorf("Format is wrong. got: %v, want: %v", got, want)
+	}
+
+	d = 12 * time.Second
+	got = formatRateReset(d)
+	want = "[rate reset in 12s]"
+	if got != want {
+		t.Errorf("Format is wrong. got: %v, want: %v", got, want)
+	}
+
+	d = -1 * (2*time.Hour + 2*time.Second)
+	got = formatRateReset(d)
+	want = "[rate limit was reset 120m02s ago]"
+	if got != want {
+		t.Errorf("Format is wrong. got: %v, want: %v", got, want)
 	}
 }

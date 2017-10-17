@@ -11,13 +11,12 @@ package datadog
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff"
@@ -25,23 +24,25 @@ import (
 
 // uriForAPI is to be called with something like "/v1/events" and it will give
 // the proper request URI to be posted to.
-func (self *Client) uriForAPI(api string) string {
-	url := os.Getenv("DATADOG_HOST")
-	if url == "" {
-		url = "https://app.datadoghq.com"
+func (client *Client) uriForAPI(api string) (string, error) {
+	baseUrl := os.Getenv("DATADOG_HOST")
+	if baseUrl == "" {
+		baseUrl = "https://app.datadoghq.com"
 	}
-	if strings.Index(api, "?") > -1 {
-		return url + "/api" + api + "&api_key=" +
-			self.apiKey + "&application_key=" + self.appKey
-	} else {
-		return url + "/api" + api + "?api_key=" +
-			self.apiKey + "&application_key=" + self.appKey
+	apiBase , err := url.Parse(baseUrl + "/api" + api)
+	if err != nil {
+		return "", err
 	}
+	q := apiBase.Query()
+	q.Add("api_key", client.apiKey)
+	q.Add("application_key", client.appKey)
+	apiBase.RawQuery = q.Encode()
+	return apiBase.String(), nil
 }
 
 // doJsonRequest is the simplest type of request: a method on a URI that returns
 // some JSON result which we unmarshal into the passed interface.
-func (self *Client) doJsonRequest(method, api string,
+func (client *Client) doJsonRequest(method, api string,
 	reqbody, out interface{}) error {
 	// Handle the body if they gave us one.
 	var bodyreader io.Reader
@@ -53,7 +54,11 @@ func (self *Client) doJsonRequest(method, api string,
 		bodyreader = bytes.NewReader(bjson)
 	}
 
-	req, err := http.NewRequest(method, self.uriForAPI(api), bodyreader)
+	apiUrlStr, err := client.uriForAPI(api)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(method, apiUrlStr, bodyreader)
 	if err != nil {
 		return err
 	}
@@ -61,12 +66,12 @@ func (self *Client) doJsonRequest(method, api string,
 		req.Header.Add("Content-Type", "application/json")
 	}
 
-	// Perform the request and retry it if it's not a POST request
+	// Perform the request and retry it if it's not a POST or PUT request
 	var resp *http.Response
-	if method == "POST" {
-		resp, err = self.HttpClient.Do(req)
+	if method == "POST" || method == "PUT" {
+		resp, err = client.HttpClient.Do(req)
 	} else {
-		resp, err = self.doRequestWithRetries(req, 60*time.Second)
+		resp, err = client.doRequestWithRetries(req, client.RetryTimeout)
 	}
 	if err != nil {
 		return err
@@ -98,34 +103,55 @@ func (self *Client) doJsonRequest(method, api string,
 		body = []byte{'{', '}'}
 	}
 
-	err = json.Unmarshal(body, &out)
-	if err != nil {
+	if err := json.Unmarshal(body, &out); err != nil {
 		return err
 	}
 	return nil
 }
 
 // doRequestWithRetries performs an HTTP request repeatedly for maxTime or until
-// no error and no HTTP response code higher than 299 is returned.
-func (self *Client) doRequestWithRetries(req *http.Request, maxTime time.Duration) (*http.Response, error) {
+// no error and no acceptable HTTP response code was returned.
+func (client *Client) doRequestWithRetries(req *http.Request, maxTime time.Duration) (*http.Response, error) {
 	var (
 		err  error
 		resp *http.Response
 		bo   = backoff.NewExponentialBackOff()
+		body []byte
 	)
+
 	bo.MaxElapsedTime = maxTime
 
-	err = backoff.Retry(func() error {
-		resp, err = self.HttpClient.Do(req)
+	// Save the body for retries
+	if req.Body != nil {
+		body, err = ioutil.ReadAll(req.Body)
+		if err != nil {
+			return resp, err
+		}
+	}
+
+	operation := func() error {
+		if body != nil {
+			r := bytes.NewReader(body)
+			req.Body = ioutil.NopCloser(r)
+		}
+
+		resp, err = client.HttpClient.Do(req)
 		if err != nil {
 			return err
 		}
 
-		if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			return errors.New("API error: " + resp.Status)
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			// 2xx all done
+			return nil
+		} else if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			// 4xx are not retryable
+			return nil
 		}
-		return nil
-	}, bo)
+
+		return fmt.Errorf("Received HTTP status code %d", resp.StatusCode)
+	}
+
+	err = backoff.Retry(operation, bo)
 
 	return resp, err
 }
