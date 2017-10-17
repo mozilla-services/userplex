@@ -3,32 +3,30 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 PROJECT		:= go.mozilla.org/userplex
-GO 			:= GOOS=$(OS) GOARCH=$(ARCH) GO15VENDOREXPERIMENT=1 go
-GOGETTER	:= GOPATH=$(shell pwd)/.tmpdeps go get -d
 
 all: test vet generate userplex
 
 dev: lint cyclo all
 
 userplex:
-	$(GO) install $(PROJECT)
+	go install $(PROJECT)
 
 vendor:
 	govend -u
 
 test:
-	$(GO) test $(PROJECT)/modules/...
-	$(GO) test $(PROJECT)
+	go test $(PROJECT)/modules/...
+	go test $(PROJECT)
 
 lint:
 	golint .
 	golint modules/...
 
 vet:
-	$(GO) vet $(PROJECT)
+	go vet $(PROJECT)
 
 generate:
-	$(GO) generate
+	go generate
 
 cyclo:
 	gocyclo -over 15 *.go modules/

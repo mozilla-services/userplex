@@ -108,7 +108,7 @@ func (r *run) create(ldapmails []string, ddusers []datadog.User) (err error) {
 	for _, ldapmail := range ldapmails {
 		isInDatadog := false
 		for _, dduser := range ddusers {
-			if ldapmail == dduser.Handle {
+			if ldapmail == *dduser.Handle {
 				isInDatadog = true
 				break
 			}
@@ -143,12 +143,12 @@ func (r *run) create(ldapmails []string, ddusers []datadog.User) (err error) {
 
 func (r *run) delete(ldapmails []string, ddusers []datadog.User) (err error) {
 	for _, dduser := range ddusers {
-		if dduser.Disabled {
+		if *dduser.Disabled {
 			continue
 		}
 		isInLDAP := false
 		for _, ldapmail := range ldapmails {
-			if dduser.Handle == ldapmail {
+			if *dduser.Handle == ldapmail {
 				isInLDAP = true
 				break
 			}
@@ -156,7 +156,7 @@ func (r *run) delete(ldapmails []string, ddusers []datadog.User) (err error) {
 		if !isInLDAP {
 			// user is not in ldap and should be disabled from datadog
 			if r.Conf.ApplyChanges {
-				dduser.Disabled = true
+				*dduser.Disabled = true
 				err = r.dcli.UpdateUser(dduser)
 				if err != nil {
 					log.Printf("[error] datadog: failed to disabled datadog user %q: %v", dduser.Handle)
@@ -167,7 +167,7 @@ func (r *run) delete(ldapmails []string, ddusers []datadog.User) (err error) {
 			// notify user
 			rcpt := r.Conf.Notify.Recipient
 			if rcpt == "{ldap:mail}" {
-				rcpt = dduser.Handle
+				rcpt = *dduser.Handle
 			}
 			r.Conf.Notify.Channel <- modules.Notification{
 				Module:      "datadog",

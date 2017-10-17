@@ -158,7 +158,7 @@ func (r *run) getPagerdutyUsers() []pagerduty.User {
 	// paginated api, get all users
 	var allUsers []pagerduty.User
 	offset := uint(0)
-	opt := pagerduty.ListUserOptions{
+	opt := pagerduty.ListUsersOptions{
 		APIListObject: pagerduty.APIListObject{Offset: offset},
 	}
 	for {

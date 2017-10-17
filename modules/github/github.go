@@ -116,7 +116,7 @@ func (r *run) Run() (err error) {
 
 userloop:
 	for user := range ldapers {
-		_, resp, err = r.ghclient.Users.Get(user)
+		_, resp, err = r.ghclient.Users.Get(oauth2.NoContext, user)
 		if err != nil || resp.StatusCode != 200 {
 			log.Printf("[error] github: could not get user %s: %s, error: %v with status %s", user, r.p.Organization.Name, err, resp.Status)
 			continue
@@ -139,7 +139,7 @@ userloop:
 				// user not in team, add them
 				if r.Conf.ApplyChanges && r.Conf.Create {
 					// add user to team
-					_, resp, err = r.ghclient.Organizations.AddTeamMembership(*team.ID, user, &github.OrganizationAddTeamMembershipOptions{
+					_, resp, err = r.ghclient.Organizations.AddTeamMembership(oauth2.NoContext, *team.ID, user, &github.OrganizationAddTeamMembershipOptions{
 						Role: membershipType,
 					})
 					if err != nil || resp.StatusCode != 200 {
@@ -213,7 +213,7 @@ userloop:
 				log.Printf("[dryrun] github: Userplex would have removed %s%s from GitHub organization %s", ldapUsernameString, member, r.p.Organization.Name)
 			} else {
 				// applying changes, user is userplexed -> remove them
-				resp, err = r.ghclient.Organizations.RemoveOrgMembership(r.p.Organization.Name, member)
+				resp, err = r.ghclient.Organizations.RemoveOrgMembership(oauth2.NoContext, r.p.Organization.Name, member)
 				if err != nil || resp.StatusCode != 200 {
 					log.Printf("[error] github: could not remove user %s from %s, error: %v with status %s", member, r.p.Organization.Name, err, resp.Status)
 				}
@@ -238,7 +238,7 @@ func (r *run) getOrgMembersMap(org organization, filter string) (membersMap map[
 		ListOptions: github.ListOptions{PerPage: 100},
 	}
 	for {
-		members, resp, err := r.ghclient.Organizations.ListMembers(org.Name, opt)
+		members, resp, err := r.ghclient.Organizations.ListMembers(oauth2.NoContext, org.Name, opt)
 		if err != nil || resp.StatusCode != 200 {
 			log.Printf("[error] github: could not list members for organization %s, error: %v with status %s", org, err, resp.Status)
 			return
@@ -263,7 +263,7 @@ func (r *run) getTeamMembersMap(team *github.Team) (membersMap map[string]bool) 
 		},
 	}
 	for {
-		members, resp, err := r.ghclient.Organizations.ListTeamMembers(*team.ID, opt)
+		members, resp, err := r.ghclient.Organizations.ListTeamMembers(oauth2.NoContext, *team.ID, opt)
 		if err != nil || resp.StatusCode != 200 {
 			log.Printf("[error] github: could not list members for organization %s, error: %v with status %s", team, err, resp.Status)
 			return
@@ -286,7 +286,7 @@ func (r *run) getOrgTeamsMap(org organization) (teamsMap map[string]*github.Team
 		PerPage: 100,
 	}
 	for {
-		teams, resp, err := r.ghclient.Organizations.ListTeams(org.Name, opt)
+		teams, resp, err := r.ghclient.Organizations.ListTeams(oauth2.NoContext, org.Name, opt)
 		if err != nil || resp.StatusCode != 200 {
 			log.Printf("[error] github: could not list teams for organization %s, error: %v", org.Name, err)
 			return
