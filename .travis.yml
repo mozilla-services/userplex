@@ -1,7 +1,7 @@
 sudo: required
 language: go
 go:
-  - 1.9
+  - 1.12
 go_import_path: go.mozilla.org/userplex
 services:
   - docker
