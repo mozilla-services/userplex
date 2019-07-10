@@ -1,18 +1,6 @@
-sudo: required
 language: go
 go:
   - 1.12
 go_import_path: go.mozilla.org/userplex
-services:
-  - docker
-branches:
-  only:
-    - master
-env:
-  global:
-    - DOCKER_USERNAME=jvehent
-    - secure: "qWXJB29xZ9WsKOZj+857IZjIILm9exCuQDeBXj7yu3uTqIp6gCoBx1ecLBgbW6WqUrhaebg3Cb2saQXHJFUt7aGmj+3+MwOuO/ks5GXCILWMW9AtiPJPXyUCJ3MZ/co+RqBlZATIYU4Ez48/fWCDJ/z6OF0XfDBclTY8adBAfklzPEgClYVfLRNW9/x0QXUFITAab5PU6iBEpRO7tpCQeAOCHfVanCdygxMQyGZkEhOFlziaPfjBVFCEYeoYq/53MjMAhWicTrGa95lHwGMXp/eGEuQnfuJmus3guA3ipwC6h17yUaeCxSIY8pf7y0I5XmO4bYxjZZUO/vsviuzczd3gndNAIHm/WqnThq0Gms2kfu22G1Krj7JzWIsE4VvMnKpWhmrcBGU2ywhQrbTvNyHD+TGaST0EMifGK8MGMaJ0SHy7kTC+dMEVWFoZ/oKbYcl3JMvcK0vqZlWPc8TZYjo6XJStuJFBwiWZSd8HsJI3SxErHmjOCWBWzzUfRqTaUoNfji0TOWTRcyAAx9iiOb5WNMtXllnl9Nt8pQvm3vI3zCRDFbCs/MrQwrlA8UJDP0zZhrTWphXdQclUOeNW3Z2BodlFDkQImBeIhGF6zOZqyuDm00F1VqYTgsA7d0NmPptl2PdoSSjU5OE2srUuIHg6LRLJ1UbmvwcOH3COhpE="
 script:
-    - make && docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
-    - docker build -t jvehent/userplex -f Dockerfile .
-    - docker push jvehent/userplex:latest
+    - make
