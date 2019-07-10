@@ -1,4 +1,4 @@
-FROM golang:1.5
+FROM golang:1.12
 MAINTAINER Julien Vehent
 ENV PROJECT=go.mozilla.org/userplex
 ENV PROJECTNAME=userplex
