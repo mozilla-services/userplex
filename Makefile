@@ -15,7 +15,7 @@ vendor:
 	govend -u
 
 test:
-	go test $(PROJECT)/modules/...
+	go test $(PROJECT)/modules/aws
 	go test $(PROJECT)
 
 lint:

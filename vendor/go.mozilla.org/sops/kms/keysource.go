@@ -42,6 +42,7 @@ type MasterKey struct {
 	EncryptedKey      string
 	CreationDate      time.Time
 	EncryptionContext map[string]*string
+	AwsProfile        string
 }
 
 // EncryptedDataKey returns the encrypted data key this master key holds
@@ -61,14 +62,14 @@ func (key *MasterKey) Encrypt(dataKey []byte) error {
 	if kmsSvc == nil || !isMocked {
 		sess, err := key.createSession()
 		if err != nil {
-			log.WithField("arn", key.Arn).Warn("Encryption failed")
+			log.WithField("arn", key.Arn).Info("Encryption failed")
 			return fmt.Errorf("Failed to create session: %v", err)
 		}
 		kmsSvc = kms.New(sess)
 	}
 	out, err := kmsSvc.Encrypt(&kms.EncryptInput{Plaintext: dataKey, KeyId: &key.Arn, EncryptionContext: key.EncryptionContext})
 	if err != nil {
-		log.WithField("arn", key.Arn).Warn("Encryption failed")
+		log.WithField("arn", key.Arn).Info("Encryption failed")
 		return fmt.Errorf("Failed to call KMS encryption service: %v", err)
 	}
 	key.EncryptedKey = base64.StdEncoding.EncodeToString(out.CiphertextBlob)
@@ -88,7 +89,7 @@ func (key *MasterKey) EncryptIfNeeded(dataKey []byte) error {
 func (key *MasterKey) Decrypt() ([]byte, error) {
 	k, err := base64.StdEncoding.DecodeString(key.EncryptedKey)
 	if err != nil {
-		log.WithField("arn", key.Arn).Warn("Decryption failed")
+		log.WithField("arn", key.Arn).Info("Decryption failed")
 		return nil, fmt.Errorf("Error base64-decoding encrypted data key: %s", err)
 	}
 	// isMocked is set by unit test to indicate that the KMS service
@@ -96,14 +97,14 @@ func (key *MasterKey) Decrypt() ([]byte, error) {
 	if kmsSvc == nil || !isMocked {
 		sess, err := key.createSession()
 		if err != nil {
-			log.WithField("arn", key.Arn).Warn("Decryption failed")
+			log.WithField("arn", key.Arn).Info("Decryption failed")
 			return nil, fmt.Errorf("Error creating AWS session: %v", err)
 		}
 		kmsSvc = kms.New(sess)
 	}
 	decrypted, err := kmsSvc.Decrypt(&kms.DecryptInput{CiphertextBlob: k, EncryptionContext: key.EncryptionContext})
 	if err != nil {
-		log.WithField("arn", key.Arn).Warn("Decryption failed")
+		log.WithField("arn", key.Arn).Info("Decryption failed")
 		return nil, fmt.Errorf("Error decrypting key: %v", err)
 	}
 	log.WithField("arn", key.Arn).Info("Decryption succeeded")
@@ -131,7 +132,7 @@ func NewMasterKey(arn string, role string, context map[string]*string) *MasterKe
 }
 
 // NewMasterKeyFromArn takes an ARN string and returns a new MasterKey for that ARN
-func NewMasterKeyFromArn(arn string, context map[string]*string) *MasterKey {
+func NewMasterKeyFromArn(arn string, context map[string]*string, awsProfile string) *MasterKey {
 	k := &MasterKey{}
 	arn = strings.Replace(arn, " ", "", -1)
 	roleIndex := strings.Index(arn, "+arn:aws:iam::")
@@ -143,17 +144,18 @@ func NewMasterKeyFromArn(arn string, context map[string]*string) *MasterKey {
 	}
 	k.EncryptionContext = context
 	k.CreationDate = time.Now().UTC()
+	k.AwsProfile = awsProfile
 	return k
 }
 
 // MasterKeysFromArnString takes a comma separated list of AWS KMS ARNs and returns a slice of new MasterKeys for those ARNs
-func MasterKeysFromArnString(arn string, context map[string]*string) []*MasterKey {
+func MasterKeysFromArnString(arn string, context map[string]*string, awsProfile string) []*MasterKey {
 	var keys []*MasterKey
 	if arn == "" {
 		return keys
 	}
 	for _, s := range strings.Split(arn, ",") {
-		keys = append(keys, NewMasterKeyFromArn(s, context))
+		keys = append(keys, NewMasterKeyFromArn(s, context, awsProfile))
 	}
 	return keys
 }
@@ -180,12 +182,18 @@ func (key MasterKey) createStsSession(config aws.Config, sess *session.Session) 
 }
 
 func (key MasterKey) createSession() (*session.Session, error) {
-	re := regexp.MustCompile(`^arn:aws[\w-]*:kms:(.+):[0-9]+:key/.+$`)
+	re := regexp.MustCompile(`^arn:aws[\w-]*:kms:(.+):[0-9]+:(key|alias)/.+$`)
 	matches := re.FindStringSubmatch(key.Arn)
 	if matches == nil {
 		return nil, fmt.Errorf("No valid ARN found in %q", key.Arn)
 	}
+
 	config := aws.Config{Region: aws.String(matches[1])}
+
+	if key.AwsProfile != "" {
+		config.Credentials = credentials.NewSharedCredentials("", key.AwsProfile)
+	}
+
 	opts := session.Options{
 		Config:                  config,
 		AssumeRoleTokenProvider: stscreds.StdinTokenProvider,
@@ -221,6 +229,7 @@ func (key MasterKey) ToMap() map[string]interface{} {
 
 // ParseKMSContext takes either a KMS context map or a comma-separated list of KMS context key:value pairs and returns a map
 func ParseKMSContext(in interface{}) map[string]*string {
+	nonStringValueWarning := "Encryption context contains a non-string value, context will not be used"
 	out := make(map[string]*string)
 
 	switch in := in.(type) {
@@ -231,7 +240,7 @@ func ParseKMSContext(in interface{}) map[string]*string {
 		for k, v := range in {
 			value, ok := v.(string)
 			if !ok {
-				log.Warn("Encryption context contains a non-string value, context will not be used")
+				log.Warn(nonStringValueWarning)
 				return nil
 			}
 			out[k] = &value
@@ -243,12 +252,12 @@ func ParseKMSContext(in interface{}) map[string]*string {
 		for k, v := range in {
 			key, ok := k.(string)
 			if !ok {
-				log.Warn("Encryption context contains a non-string value, context will not be used")
+				log.Warn(nonStringValueWarning)
 				return nil
 			}
 			value, ok := v.(string)
 			if !ok {
-				log.Warn("Encryption context contains a non-string value, context will not be used")
+				log.Warn(nonStringValueWarning)
 				return nil
 			}
 			out[key] = &value
@@ -260,7 +269,7 @@ func ParseKMSContext(in interface{}) map[string]*string {
 		for _, kv := range strings.Split(in, ",") {
 			kv := strings.Split(kv, ":")
 			if len(kv) != 2 {
-				log.Warn("Encryption context contains a non-string value, context will not be used")
+				log.Warn(nonStringValueWarning)
 				return nil
 			}
 			out[kv[0]] = &kv[1]

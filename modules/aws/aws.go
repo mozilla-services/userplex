@@ -87,7 +87,7 @@ func (r *run) Run() (err error) {
 		// reset specified users
 		for _, user := range resetUsers {
 			var uid string
-			uid, _, err = r.getLdaperByUID(user)
+			uid, err = r.getLdaperByUID(user)
 			if err != nil {
 				// logging happens in getLdaper
 				return
@@ -100,23 +100,21 @@ func (r *run) Run() (err error) {
 		return
 	}
 
-	// Retrieve a list of ldap users from the groups configured
-	ldapers := r.getLdapers()
-
 	// create or add the users to groups.
 	if r.Conf.Create {
-		for uid, hasPGPKey := range ldapers {
+		// Retrieve a list of ldap users from the groups configured
+		ldapers, err := r.getLdapers()
+		if err != nil {
+			return fmt.Errorf("[error] aws: %v", err)
+		}
+
+		for _, uid := range ldapers {
 			resp, err := r.iam.GetUser(&iam.GetUserInput{
 				UserName: aws.String(uid),
 			})
 			if err != nil || resp == nil {
 				log.Printf("[info] aws %q: user %q not found, needs to be created",
 					r.p.AccountName, uid)
-				if !hasPGPKey && r.Conf.NotifyUsers {
-					log.Printf("[warning] aws %q: %q has no PGP fingerprint in LDAP, skipping creation",
-						r.p.AccountName, uid)
-					continue
-				}
 				r.createIamUser(uid)
 				countCreated++
 			} else {
@@ -128,10 +126,19 @@ func (r *run) Run() (err error) {
 	}
 	// find which users are no longer in ldap and needs to be removed from aws
 	if r.Conf.Delete {
+		// Retrieve a list of ldap users from the groups configured
+		ldapers, err := r.getLdapers()
+		if err != nil {
+			return fmt.Errorf("[error] aws: %v", err)
+		}
+
 		// Retrieve a list of iam users from the groups configured
 		iamers = r.getIamers()
 		for uid := range iamers {
-			if _, ok := ldapers[uid]; !ok {
+			for _, ldapuid := range ldapers {
+				if ldapuid != uid {
+					continue
+				}
 				r.debug("aws %q: %q found in IAM group but not in LDAP, needs deletion",
 					r.p.AccountName, uid)
 				r.removeIamUser(uid)
@@ -144,25 +151,25 @@ func (r *run) Run() (err error) {
 	return
 }
 
-func (r *run) getLdapers() (lgm map[string]bool) {
-	lgm = make(map[string]bool)
+func (r *run) getLdapers() (uids []string, err error) {
 	users, err := r.Conf.LdapCli.GetEnabledUsersInGroups(r.Conf.LdapGroups)
 	if err != nil {
 		return
 	}
 	for _, user := range users {
 		shortdn := strings.Split(user, ",")[0]
-		uid, hasPGPKey, err := r.getLdaper(shortdn)
+		uid, err := r.getLdaper(shortdn)
 		if err != nil {
-			// error logging happens in getLdaper
+			r.debug("aws %s: skipping user %s: %v",
+				r.p.AccountName, shortdn, err)
 			continue
 		}
-		lgm[uid] = hasPGPKey
+		uids = append(uids, uid)
 	}
 	return
 }
 
-func (r *run) getLdaperByUID(ldapUserID string) (uid string, hasPGPKey bool, err error) {
+func (r *run) getLdaperByUID(ldapUserID string) (uid string, err error) {
 	var user string
 	user, err = r.Conf.LdapCli.GetUserDNById(ldapUserID)
 	shortdn := strings.Split(user, ",")[0]
@@ -173,7 +180,7 @@ func (r *run) getLdaperByUID(ldapUserID string) (uid string, hasPGPKey bool, err
 	return r.getLdaper(shortdn)
 }
 
-func (r *run) getLdaper(shortdn string) (uid string, hasPGPKey bool, err error) {
+func (r *run) getLdaper(shortdn string) (uid string, err error) {
 	uid, err = r.Conf.LdapCli.GetUserId(shortdn)
 	if err != nil {
 		log.Printf("[error] aws %q: ldap query failed with error %v", r.p.AccountName, err)
@@ -185,15 +192,21 @@ func (r *run) getLdaper(shortdn string) (uid string, hasPGPKey bool, err error) 
 			uid = mapping.LocalUID
 		}
 	}
+	// make sure we have an ssh key for that user
+	sshkeys, err := r.getSSHPubKeys(uid)
+	if err != nil || len(sshkeys) < 1 {
+		return uid, fmt.Errorf("no suitable SSH key found for %s: %v",
+			uid, err)
+	}
+
 	if r.Conf.NotifyUsers {
 		// make sure we can find a PGP public key for the user to encrypt the notification
 		// if no pubkey is found, log an error and set the user's entry to False
-		_, pgpErr := r.Conf.LdapCli.GetUserPGPKey(shortdn)
-		if pgpErr != nil {
-			r.debug("aws %q: no pgp public key could be found for %s: %v",
-				r.p.AccountName, shortdn, pgpErr)
+		_, err = r.Conf.LdapCli.GetUserPGPKey(shortdn)
+		if err != nil {
+			return uid, fmt.Errorf("no pgp public key found for %s: %v",
+				uid, err)
 		}
-		hasPGPKey = true
 	}
 	return
 }
@@ -597,8 +610,7 @@ func (r *run) getSSHPubKeys(uid string) ([]string, error) {
 			r.p.AccountName, uid, err)
 	}
 	shortdn := strings.Split(dn, ",")[0]
-	keys, err := r.Conf.LdapCli.GetUserSSHPublicKeys(shortdn)
-	return keys, err
+	return r.Conf.LdapCli.GetUserSSHPublicKeys(shortdn)
 }
 
 func (r *run) notify(uid, body string) {

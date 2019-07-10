@@ -5,17 +5,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/smartystreets/gunit"
+	"github.com/smartystreets/assertions/internal/unit"
 )
 
 /**************************************************************************/
 
 func TestAssertionsFixture(t *testing.T) {
-	gunit.Run(new(AssertionsFixture), t)
+	unit.Run(new(AssertionsFixture), t)
 }
 
 type AssertionsFixture struct {
-	*gunit.Fixture
+	*unit.Fixture
 }
 
 func (this *AssertionsFixture) Setup() {
@@ -50,6 +50,9 @@ func format(message string) string {
 	for strings.Contains(message, "  ") {
 		message = strings.Replace(message, "  ", " ", -1)
 	}
+	message = strings.Replace(message, "\x1b[32m", "", -1)
+	message = strings.Replace(message, "\x1b[31m", "", -1)
+	message = strings.Replace(message, "\x1b[0m", "", -1)
 	return message
 }
 

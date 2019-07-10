@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 Google LLC
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,8 +6,10 @@ package gensupport
 
 import (
 	"bytes"
+	cryptorand "crypto/rand"
 	"io"
 	"io/ioutil"
+	mathrand "math/rand"
 	"net/http"
 	"reflect"
 	"strings"
@@ -267,6 +269,71 @@ func TestUploadRequest(t *testing.T) {
 	}
 }
 
+func TestUploadRequestGetBody(t *testing.T) {
+	// Test that a single chunk results in a getBody function that is non-nil, and
+	// that produces the same content as the original body.
+
+	// Restore the crypto/rand.Reader mocked out below.
+	defer func(old io.Reader) { cryptorand.Reader = old }(cryptorand.Reader)
+
+	for i, test := range []struct {
+		desc        string
+		r           io.Reader
+		chunkSize   int
+		wantGetBody bool
+	}{
+		{
+			desc:        "chunk size of zero: no getBody",
+			r:           &nullReader{10},
+			chunkSize:   0,
+			wantGetBody: false,
+		},
+		{
+			desc:        "chunk size == data size: 1 chunk, getBody",
+			r:           &nullReader{googleapi.MinUploadChunkSize},
+			chunkSize:   1,
+			wantGetBody: true,
+		},
+		{
+			desc: "chunk size < data size: MediaBuffer, >1 chunk, no getBody",
+			// No getBody here, because the initial request contains no media data
+			// Note that ChunkSize = 1 is rounded up to googleapi.MinUploadChunkSize.
+			r:           &nullReader{2 * googleapi.MinUploadChunkSize},
+			chunkSize:   1,
+			wantGetBody: false,
+		},
+	} {
+		cryptorand.Reader = mathrand.New(mathrand.NewSource(int64(i)))
+
+		mi := NewInfoFromMedia(test.r, []googleapi.MediaOption{googleapi.ChunkSize(test.chunkSize)})
+		r, getBody, _ := mi.UploadRequest(http.Header{}, bytes.NewBuffer([]byte("body")))
+		if got, want := (getBody != nil), test.wantGetBody; got != want {
+			t.Errorf("%s: getBody: got %t, want %t", test.desc, got, want)
+			continue
+		}
+		if getBody == nil {
+			continue
+		}
+		want, err := ioutil.ReadAll(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := 0; i < 3; i++ {
+			rc, err := getBody()
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := ioutil.ReadAll(rc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, want) {
+				t.Errorf("%s, %d:\ngot:\n%s\nwant:\n%s", test.desc, i, string(got), string(want))
+			}
+		}
+	}
+}
+
 func TestResumableUpload(t *testing.T) {
 	for _, test := range []struct {
 		desc                string
@@ -275,7 +342,6 @@ func TestResumableUpload(t *testing.T) {
 		wantUploadType      string
 		wantResumableUpload bool
 	}{
-
 		{
 			desc:                "chunk size of zero: don't use a MediaBuffer; upload as a single chunk",
 			r:                   strings.NewReader("12345"),

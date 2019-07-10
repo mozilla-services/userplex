@@ -1,13 +1,11 @@
 package integration
 
 import (
-	"github.com/zorkian/go-datadog-api"
 	"testing"
-)
 
-func init() {
-	client = initTest()
-}
+	"github.com/stretchr/testify/assert"
+	"github.com/zorkian/go-datadog-api"
+)
 
 func TestScreenboardCreateAndDelete(t *testing.T) {
 	expected := getTestScreenboard()
@@ -93,11 +91,65 @@ func TestScreenboardGet(t *testing.T) {
 	}
 }
 
+func TestScreenboardGetWithNewId(t *testing.T) {
+	expected := getTestScreenboard()
+	// create the screenboard and compare it
+	actual, err := client.CreateScreenboard(expected)
+	if err != nil {
+		t.Fatalf("Creating a screenboard failed when it shouldn't. (%s)", err)
+	}
+
+	defer cleanUpScreenboard(t, *actual.Id)
+
+	assertScreenboardEquals(t, actual, expected)
+
+	// try to fetch it freshly and compare it again
+	actual, err = client.GetScreenboard(*actual.Id)
+	if err != nil {
+		t.Fatalf("Retrieving a screenboard failed when it shouldn't. (%s)", err)
+	}
+
+	assertScreenboardEquals(t, actual, expected)
+
+	// try to fetch it freshly using the new id format and compare it again
+	actualWithNewId, err := client.GetScreenboard(*actual.NewId)
+	if err != nil {
+		t.Fatalf("Retrieving a screenboard failed when it shouldn't. (%s)", err)
+	}
+	assertScreenboardEquals(t, actualWithNewId, expected)
+
+	// the ids are equal whether fetching using the old or the new id
+	assert.Equal(t, *actualWithNewId.Id, *actual.Id)
+
+	// try to fetch it freshly using a string, but with a wrong value
+	actual, err = client.GetScreenboard("random_string")
+	if assert.NotNil(t, err) {
+		// it should not fail because of the id format
+		assert.NotContains(t, err.Error(), "unsupported id type")
+		assert.Contains(t, err.Error(), "404")
+	}
+
+	// try to fetch it freshly using a boolean
+	actual, err = client.GetScreenboard(true)
+	if assert.NotNil(t, err) {
+		// it should fail because of the id format
+		assert.Contains(t, err.Error(), "unsupported id type")
+	}
+
+	// try to fetch it freshly using a float64
+	actual, err = client.GetScreenboard(5.5)
+	if assert.NotNil(t, err) {
+		// it should fail because of the id format
+		assert.Contains(t, err.Error(), "unsupported id type")
+	}
+
+}
+
 func getTestScreenboard() *datadog.Screenboard {
 	return &datadog.Screenboard{
 		Title:   datadog.String("___Test-Board___"),
-		Height:  datadog.String("600"),
-		Width:   datadog.String("800"),
+		Height:  datadog.Int(600),
+		Width:   datadog.Int(800),
 		Widgets: []datadog.Widget{},
 	}
 }
@@ -132,10 +184,10 @@ func assertScreenboardEquals(t *testing.T, actual, expected *datadog.Screenboard
 		t.Errorf("Screenboard title does not match: %s != %s", *actual.Title, *expected.Title)
 	}
 	if *actual.Width != *expected.Width {
-		t.Errorf("Screenboard width does not match: %s != %s", *actual.Width, *expected.Width)
+		t.Errorf("Screenboard width does not match: %d != %d", *actual.Width, *expected.Width)
 	}
 	if *actual.Height != *expected.Height {
-		t.Errorf("Screenboard width does not match: %s != %s", *actual.Height, *expected.Height)
+		t.Errorf("Screenboard width does not match: %d != %d", *actual.Height, *expected.Height)
 	}
 	if len(actual.Widgets) != len(expected.Widgets) {
 		t.Errorf("Number of Screenboard widgets does not match: %d != %d", len(actual.Widgets), len(expected.Widgets))

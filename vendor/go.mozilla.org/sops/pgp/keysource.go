@@ -58,6 +58,10 @@ func gpgBinary() string {
 }
 
 func (key *MasterKey) encryptWithGPGBinary(dataKey []byte) error {
+	fingerprint := key.Fingerprint
+	if offset := len(fingerprint) - 16; offset > 0 {
+		fingerprint = fingerprint[offset:]
+	}
 	args := []string{
 		"--no-default-recipient",
 		"--yes",
@@ -66,7 +70,7 @@ func (key *MasterKey) encryptWithGPGBinary(dataKey []byte) error {
 		"-r",
 		key.Fingerprint,
 		"--trusted-key",
-		key.Fingerprint[len(key.Fingerprint)-16:],
+		fingerprint,
 		"--no-encrypt-to",
 	}
 	cmd := exec.Command(gpgBinary(), args...)
@@ -90,13 +94,21 @@ func getKeyFromKeyServer(keyserver string, fingerprint string) (openpgp.Entity, 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return openpgp.Entity{}, fmt.Errorf("keyserver returned non-200 status code %d", resp.Status)
+		return openpgp.Entity{}, fmt.Errorf("keyserver returned non-200 status code %s", resp.Status)
 	}
 	ents, err := openpgp.ReadArmoredKeyRing(resp.Body)
 	if err != nil {
 		return openpgp.Entity{}, fmt.Errorf("could not read entities: %s", err)
 	}
 	return *ents[0], nil
+}
+
+func gpgKeyServer() string {
+	keyServer := "gpg.mozilla.org"
+	if envKeyServer := os.Getenv("SOPS_GPG_KEYSERVER"); envKeyServer != "" {
+		keyServer = envKeyServer
+	}
+	return keyServer
 }
 
 func (key *MasterKey) getPubKey() (openpgp.Entity, error) {
@@ -108,7 +120,8 @@ func (key *MasterKey) getPubKey() (openpgp.Entity, error) {
 			return entity, nil
 		}
 	}
-	entity, err := getKeyFromKeyServer("gpg.mozilla.org", key.Fingerprint)
+	keyServer := gpgKeyServer()
+	entity, err := getKeyFromKeyServer(keyServer, key.Fingerprint)
 	if err != nil {
 		return openpgp.Entity{},
 			fmt.Errorf("key with fingerprint %s is not available "+
@@ -127,7 +140,7 @@ func (key *MasterKey) encryptWithCryptoOpenPGP(dataKey []byte) error {
 	if err != nil {
 		return err
 	}
-	plaintextbuf, err := openpgp.Encrypt(armorbuf, []*openpgp.Entity{&entity}, nil, nil, nil)
+	plaintextbuf, err := openpgp.Encrypt(armorbuf, []*openpgp.Entity{&entity}, nil, &openpgp.FileHints{IsBinary: true}, nil)
 	if err != nil {
 		return err
 	}
@@ -163,7 +176,7 @@ func (key *MasterKey) Encrypt(dataKey []byte) error {
 		log.WithField("fingerprint", key.Fingerprint).Info("Encryption succeeded")
 		return nil
 	}
-	log.WithField("fingerprint", key.Fingerprint).Warn("Encryption failed")
+	log.WithField("fingerprint", key.Fingerprint).Info("Encryption failed")
 	return fmt.Errorf(
 		`could not encrypt data key with PGP key: golang.org/x/crypto/openpgp error: %v; GPG binary error: %v`,
 		openpgpErr, binaryErr)
@@ -225,7 +238,7 @@ func (key *MasterKey) Decrypt() ([]byte, error) {
 		log.WithField("fingerprint", key.Fingerprint).Info("Decryption succeeded")
 		return dataKey, nil
 	}
-	log.WithField("fingerprint", key.Fingerprint).Warn("Decryption failed")
+	log.WithField("fingerprint", key.Fingerprint).Info("Decryption failed")
 	return nil, fmt.Errorf(
 		`could not decrypt data key with PGP key: golang.org/x/crypto/openpgp error: %v; GPG binary error: %v`,
 		openpgpErr, binaryErr)
@@ -246,7 +259,7 @@ func (key *MasterKey) gpgHome() string {
 	if dir == "" {
 		usr, err := user.Current()
 		if err != nil {
-			return "~/.gnupg"
+			return path.Join(os.Getenv("HOME"), "/.gnupg")
 		}
 		return path.Join(usr.HomeDir, ".gnupg")
 	}

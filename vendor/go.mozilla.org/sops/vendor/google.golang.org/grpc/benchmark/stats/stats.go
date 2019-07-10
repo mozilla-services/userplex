@@ -16,6 +16,7 @@
  *
  */
 
+// Package stats registers stats used for creating benchmarks
 package stats
 
 import (
@@ -31,6 +32,7 @@ import (
 // Features contains most fields for a benchmark
 type Features struct {
 	NetworkMode        string
+	UseBufConn         bool
 	EnableTrace        bool
 	Latency            time.Duration
 	Kbps               int
@@ -38,14 +40,23 @@ type Features struct {
 	MaxConcurrentCalls int
 	ReqSizeBytes       int
 	RespSizeBytes      int
-	EnableCompressor   bool
+	ModeCompressor     string
+	EnableChannelz     bool
+	EnablePreloader    bool
 }
 
 // String returns the textual output of the Features as string.
 func (f Features) String() string {
 	return fmt.Sprintf("traceMode_%t-latency_%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-		"%#v-reqSize_%#vB-respSize_%#vB-Compressor_%t", f.EnableTrace,
-		f.Latency.String(), f.Kbps, f.Mtu, f.MaxConcurrentCalls, f.ReqSizeBytes, f.RespSizeBytes, f.EnableCompressor)
+		"%#v-reqSize_%#vB-respSize_%#vB-Compressor_%s-Preloader_%t", f.EnableTrace,
+		f.Latency.String(), f.Kbps, f.Mtu, f.MaxConcurrentCalls, f.ReqSizeBytes, f.RespSizeBytes, f.ModeCompressor, f.EnablePreloader)
+}
+
+// ConciseString returns the concise textual output of the Features as string, skipping
+// setting with default value.
+func (f Features) ConciseString() string {
+	noneEmptyPos := []bool{f.EnableTrace, f.Latency != 0, f.Kbps != 0, f.Mtu != 0, true, true, true, f.ModeCompressor != "off", f.EnableChannelz, f.EnablePreloader}
+	return PartialPrintString(noneEmptyPos, f, false)
 }
 
 // PartialPrintString can print certain features with different format.
@@ -63,7 +74,7 @@ func PartialPrintString(noneEmptyPos []bool, f Features, shared bool) string {
 		linker = "_"
 	}
 	if noneEmptyPos[0] {
-		s += fmt.Sprintf("%sTrace%s%t%s", prefix, linker, f.EnableCompressor, suffix)
+		s += fmt.Sprintf("%sTrace%s%t%s", prefix, linker, f.EnableTrace, suffix)
 	}
 	if shared && f.NetworkMode != "" {
 		s += fmt.Sprintf("Network: %s \n", f.NetworkMode)
@@ -90,7 +101,13 @@ func PartialPrintString(noneEmptyPos []bool, f Features, shared bool) string {
 		s += fmt.Sprintf("%srespSize%s%#vB%s", prefix, linker, f.RespSizeBytes, suffix)
 	}
 	if noneEmptyPos[7] {
-		s += fmt.Sprintf("%sCompressor%s%t%s", prefix, linker, f.EnableCompressor, suffix)
+		s += fmt.Sprintf("%sCompressor%s%s%s", prefix, linker, f.ModeCompressor, suffix)
+	}
+	if noneEmptyPos[8] {
+		s += fmt.Sprintf("%sChannelz%s%t%s", prefix, linker, f.EnableChannelz, suffix)
+	}
+	if noneEmptyPos[9] {
+		s += fmt.Sprintf("%sPreloader%s%t%s", prefix, linker, f.EnablePreloader, suffix)
 	}
 	return s
 }
@@ -255,7 +272,7 @@ func (stats *Stats) maybeUpdate() {
 	stats.dirty = false
 
 	if stats.durations.Len() != 0 {
-		var percentToObserve = []int{50, 90}
+		var percentToObserve = []int{50, 90, 99}
 		// First data record min unit from the latency result.
 		stats.result.Latency = append(stats.result.Latency, percentLatency{Percent: -1, Value: stats.unit})
 		for _, position := range percentToObserve {

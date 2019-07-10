@@ -30,13 +30,16 @@ type GraphDefinitionRequest struct {
 	Style              *GraphDefinitionRequestStyle `json:"style,omitempty"`
 
 	// For change type graphs
-	ChangeType     *string `json:"change_type,omitempty"`
-	OrderDirection *string `json:"order_dir,omitempty"`
-	CompareTo      *string `json:"compare_to,omitempty"`
-	IncreaseGood   *bool   `json:"increase_good,omitempty"`
-	OrderBy        *string `json:"order_by,omitempty"`
-	ExtraCol       *string `json:"extra_col,omitempty"`
+	ChangeType     *string                            `json:"change_type,omitempty"`
+	OrderDirection *string                            `json:"order_dir,omitempty"`
+	CompareTo      *string                            `json:"compare_to,omitempty"`
+	IncreaseGood   *bool                              `json:"increase_good,omitempty"`
+	OrderBy        *string                            `json:"order_by,omitempty"`
+	ExtraCol       *string                            `json:"extra_col,omitempty"`
+	Metadata       map[string]GraphDefinitionMetadata `json:"metadata,omitempty"`
 }
+
+type GraphDefinitionMetadata TileDefMetadata
 
 type GraphDefinitionMarker struct {
 	Type  *string      `json:"type,omitempty"`
@@ -52,14 +55,65 @@ type GraphEvent struct {
 }
 
 type Yaxis struct {
-	Min   *float64 `json:"min,omitempty"`
-	Max   *float64 `json:"max,omitempty"`
-	Scale *string  `json:"scale,omitempty"`
+	Min          *float64 `json:"min,omitempty"`
+	AutoMin      bool     `json:"-"`
+	Max          *float64 `json:"max,omitempty"`
+	AutoMax      bool     `json:"-"`
+	Scale        *string  `json:"scale,omitempty"`
+	IncludeZero  *bool    `json:"includeZero,omitempty"`
+	IncludeUnits *bool    `json:"units,omitempty"`
+}
+
+// UnmarshalJSON is a Custom Unmarshal for Yaxis.Min/Yaxis.Max. If the datadog API
+// returns "auto" for min or max, then we should set Yaxis.min or Yaxis.max to nil,
+// respectively.
+func (y *Yaxis) UnmarshalJSON(data []byte) error {
+	type Alias Yaxis
+	wrapper := &struct {
+		Min *json.Number `json:"min,omitempty"`
+		Max *json.Number `json:"max,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(y),
+	}
+
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		return err
+	}
+
+	if wrapper.Min != nil {
+		if *wrapper.Min == "auto" {
+			y.AutoMin = true
+			y.Min = nil
+		} else {
+			f, err := wrapper.Min.Float64()
+			if err != nil {
+				return err
+			}
+			y.Min = &f
+		}
+	}
+
+	if wrapper.Max != nil {
+		if *wrapper.Max == "auto" {
+			y.AutoMax = true
+			y.Max = nil
+		} else {
+			f, err := wrapper.Max.Float64()
+			if err != nil {
+				return err
+			}
+			y.Max = &f
+		}
+	}
+	return nil
 }
 
 type Style struct {
-	Palette     *string `json:"palette,omitempty"`
-	PaletteFlip *bool   `json:"paletteFlip,omitempty"`
+	Palette     *string      `json:"palette,omitempty"`
+	PaletteFlip *bool        `json:"paletteFlip,omitempty"`
+	FillMin     *json.Number `json:"fillMin,omitempty"`
+	FillMax     *json.Number `json:"fillMax,omitempty"`
 }
 
 type GraphDefinition struct {
@@ -72,18 +126,18 @@ type GraphDefinition struct {
 	Yaxis Yaxis `json:"yaxis,omitempty"`
 
 	// For query value type graphs
-	Autoscale  *bool   `json:"autoscale,omitempty"`
-	TextAlign  *string `json:"text_align,omitempty"`
-	Precision  *string `json:"precision,omitempty"`
-	CustomUnit *string `json:"custom_unit,omitempty"`
+	Autoscale  *bool       `json:"autoscale,omitempty"`
+	TextAlign  *string     `json:"text_align,omitempty"`
+	Precision  *PrecisionT `json:"precision,omitempty"`
+	CustomUnit *string     `json:"custom_unit,omitempty"`
 
-	// For hostname type graphs
-	Style *Style `json:"Style,omitempty"`
-
+	// For hostmaps
+	Style                 *Style   `json:"style,omitempty"`
 	Groups                []string `json:"group,omitempty"`
 	IncludeNoMetricHosts  *bool    `json:"noMetricHosts,omitempty"`
 	Scopes                []string `json:"scope,omitempty"`
 	IncludeUngroupedHosts *bool    `json:"noGroupHosts,omitempty"`
+	NodeType              *string  `json:"nodeType,omitempty"`
 }
 
 // Graph represents a graph that might exist on a dashboard.
@@ -103,6 +157,7 @@ type TemplateVariable struct {
 // struct when we load a dashboard in detail.
 type Dashboard struct {
 	Id                *int               `json:"id,omitempty"`
+	NewId             *string            `json:"new_id,omitempty"`
 	Description       *string            `json:"description,omitempty"`
 	Title             *string            `json:"title,omitempty"`
 	Graphs            []Graph            `json:"graphs,omitempty"`
@@ -113,10 +168,27 @@ type Dashboard struct {
 // DashboardLite represents a user created dashboard. This is the mini
 // struct when we load the summaries.
 type DashboardLite struct {
-	Id          *int    `json:"id,string,omitempty"` // TODO: Remove ',string'.
-	Resource    *string `json:"resource,omitempty"`
-	Description *string `json:"description,omitempty"`
-	Title       *string `json:"title,omitempty"`
+	Id          *int       `json:"id,string,omitempty"` // TODO: Remove ',string'.
+	Resource    *string    `json:"resource,omitempty"`
+	Description *string    `json:"description,omitempty"`
+	Title       *string    `json:"title,omitempty"`
+	ReadOnly    *bool      `json:"read_only,omitempty"`
+	Created     *string    `json:"created,omitempty"`
+	Modified    *string    `json:"modified,omitempty"`
+	CreatedBy   *CreatedBy `json:"created_by,omitempty"`
+}
+
+// CreatedBy represents a field from DashboardLite.
+type CreatedBy struct {
+	Disabled   *bool   `json:"disabled,omitempty"`
+	Handle     *string `json:"handle,omitempty"`
+	Name       *string `json:"name,omitempty"`
+	IsAdmin    *bool   `json:"is_admin,omitempty"`
+	Role       *string `json:"role,omitempty"`
+	AccessRole *string `json:"access_role,omitempty"`
+	Verified   *bool   `json:"verified,omitempty"`
+	Email      *string `json:"email,omitempty"`
+	Icon       *string `json:"icon,omitempty"`
 }
 
 // reqGetDashboards from /api/v1/dash
@@ -132,18 +204,25 @@ type reqGetDashboard struct {
 }
 
 type DashboardConditionalFormat struct {
-	Palette       *string      `json:"palette,omitempty"`
-	Comparator    *string      `json:"comparator,omitempty"`
-	CustomBgColor *string      `json:"custom_bg_color,omitempty"`
-	Value         *json.Number `json:"value,omitempty"`
-	Inverted      *bool        `json:"invert,omitempty"`
-	CustomFgColor *string      `json:"custom_fg_color,omitempty"`
+	Palette        *string      `json:"palette,omitempty"`
+	Comparator     *string      `json:"comparator,omitempty"`
+	CustomBgColor  *string      `json:"custom_bg_color,omitempty"`
+	Value          *json.Number `json:"value,omitempty"`
+	Inverted       *bool        `json:"invert,omitempty"`
+	CustomFgColor  *string      `json:"custom_fg_color,omitempty"`
+	CustomImageUrl *string      `json:"custom_image,omitempty"`
 }
 
 // GetDashboard returns a single dashboard created on this account.
-func (client *Client) GetDashboard(id int) (*Dashboard, error) {
+func (client *Client) GetDashboard(id interface{}) (*Dashboard, error) {
+
+	stringId, err := GetStringId(id)
+	if err != nil {
+		return nil, err
+	}
+
 	var out reqGetDashboard
-	if err := client.doJsonRequest("GET", fmt.Sprintf("/v1/dash/%d", id), nil, &out); err != nil {
+	if err := client.doJsonRequest("GET", fmt.Sprintf("/v1/dash/%s", stringId), nil, &out); err != nil {
 		return nil, err
 	}
 	return out.Dashboard, nil

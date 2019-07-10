@@ -7,6 +7,7 @@ package keyservice
 import (
 	"fmt"
 
+	"go.mozilla.org/sops/azkv"
 	"go.mozilla.org/sops/gcpkms"
 	"go.mozilla.org/sops/keys"
 	"go.mozilla.org/sops/kms"
@@ -33,16 +34,27 @@ func KeyFromMasterKey(mk keys.MasterKey) Key {
 			},
 		}
 	case *kms.MasterKey:
-		var ctx map[string]string
+		ctx := make(map[string]string)
 		for k, v := range mk.EncryptionContext {
 			ctx[k] = *v
 		}
 		return Key{
 			KeyType: &Key_KmsKey{
 				KmsKey: &KmsKey{
-					Arn:     mk.Arn,
-					Role:    mk.Role,
-					Context: ctx,
+					Arn:        mk.Arn,
+					Role:       mk.Role,
+					Context:    ctx,
+					AwsProfile: mk.AwsProfile,
+				},
+			},
+		}
+	case *azkv.MasterKey:
+		return Key{
+			KeyType: &Key_AzureKeyvaultKey{
+				AzureKeyvaultKey: &AzureKeyVaultKey{
+					VaultUrl: mk.VaultURL,
+					Name:     mk.Name,
+					Version:  mk.Version,
 				},
 			},
 		}

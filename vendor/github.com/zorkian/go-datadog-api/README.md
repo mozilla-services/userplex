@@ -1,6 +1,8 @@
 [![GoDoc](http://img.shields.io/badge/godoc-reference-blue.svg)](https://godoc.org/gopkg.in/zorkian/go-datadog-api.v2)
+[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![Build
 status](https://travis-ci.org/zorkian/go-datadog-api.svg)](https://travis-ci.org/zorkian/go-datadog-api)
+[![Go Report Card](https://goreportcard.com/badge/github.com/zorkian/go-datadog-api)](https://goreportcard.com/report/github.com/zorkian/go-datadog-api)
 
 # Datadog API in Go
 
@@ -38,7 +40,7 @@ Using the client:
 ```go
     client := datadog.NewClient("api key", "application key")
 
-    dash, err := client.GetDashboard(datadog.Int(10880))
+    dash, err := client.GetDashboard(*datadog.Int(10880))
     if err != nil {
         log.Fatalf("fatal: %s\n", err)
     }
@@ -115,4 +117,4 @@ make generate
 
 Please see the LICENSE file for the included license information.
 
-Copyright 2013-2017 by authors and contributors.
+Copyright 2013-2019 by authors and contributors.

@@ -60,6 +60,8 @@ func ExampleOrganizations_AcceptHandshake_shared00() {
 				fmt.Println(organizations.ErrCodeServiceException, aerr.Error())
 			case organizations.ErrCodeTooManyRequestsException:
 				fmt.Println(organizations.ErrCodeTooManyRequestsException, aerr.Error())
+			case organizations.ErrCodeAccessDeniedForDependencyException:
+				fmt.Println(organizations.ErrCodeAccessDeniedForDependencyException, aerr.Error())
 			default:
 				fmt.Println(aerr.Error())
 			}
@@ -77,7 +79,6 @@ func ExampleOrganizations_AcceptHandshake_shared00() {
 // To attach a policy to an OU
 //
 // The following example shows how to attach a service control policy (SCP) to an OU:
-//
 func ExampleOrganizations_AttachPolicy_shared00() {
 	svc := organizations.New(session.New())
 	input := &organizations.AttachPolicyInput{
@@ -128,7 +129,6 @@ func ExampleOrganizations_AttachPolicy_shared00() {
 // To attach a policy to an account
 //
 // The following example shows how to attach a service control policy (SCP) to an account:
-//
 func ExampleOrganizations_AttachPolicy_shared01() {
 	svc := organizations.New(session.New())
 	input := &organizations.AttachPolicyInput{
@@ -181,7 +181,6 @@ func ExampleOrganizations_AttachPolicy_shared01() {
 // Bill previously sent an invitation to Susan's account to join his organization. He
 // changes his mind and decides to cancel the invitation before Susan accepts it. The
 // following example shows Bill's cancellation:
-//
 func ExampleOrganizations_CancelHandshake_shared00() {
 	svc := organizations.New(session.New())
 	input := &organizations.CancelHandshakeInput{
@@ -227,10 +226,9 @@ func ExampleOrganizations_CancelHandshake_shared00() {
 // The owner of an organization creates a member account in the organization. The following
 // example shows that when the organization owner creates the member account, the account
 // is preconfigured with the name "Production Account" and an owner email address of
-// susan@example.com.  An IAM role is automatically created using the default name because
+// susan@example.com. An IAM role is automatically created using the default name because
 // the roleName parameter is not used. AWS Organizations sends Susan a "Welcome to AWS"
 // email:
-//
 func ExampleOrganizations_CreateAccount_shared00() {
 	svc := organizations.New(session.New())
 	input := &organizations.CreateAccountInput{
@@ -258,6 +256,8 @@ func ExampleOrganizations_CreateAccount_shared00() {
 				fmt.Println(organizations.ErrCodeServiceException, aerr.Error())
 			case organizations.ErrCodeTooManyRequestsException:
 				fmt.Println(organizations.ErrCodeTooManyRequestsException, aerr.Error())
+			case organizations.ErrCodeUnsupportedAPIEndpointException:
+				fmt.Println(organizations.ErrCodeUnsupportedAPIEndpointException, aerr.Error())
 			default:
 				fmt.Println(aerr.Error())
 			}
@@ -278,7 +278,6 @@ func ExampleOrganizations_CreateAccount_shared00() {
 // The following example shows that the account becomes the master account in the new
 // organization. Because he does not specify a feature set, the new organization defaults
 // to all features enabled and service control policies enabled on the root:
-//
 func ExampleOrganizations_CreateOrganization_shared00() {
 	svc := organizations.New(session.New())
 	input := &organizations.CreateOrganizationInput{}
@@ -301,6 +300,8 @@ func ExampleOrganizations_CreateOrganization_shared00() {
 				fmt.Println(organizations.ErrCodeServiceException, aerr.Error())
 			case organizations.ErrCodeTooManyRequestsException:
 				fmt.Println(organizations.ErrCodeTooManyRequestsException, aerr.Error())
+			case organizations.ErrCodeAccessDeniedForDependencyException:
+				fmt.Println(organizations.ErrCodeAccessDeniedForDependencyException, aerr.Error())
 			default:
 				fmt.Println(aerr.Error())
 			}
@@ -320,7 +321,6 @@ func ExampleOrganizations_CreateOrganization_shared00() {
 // In the following example, Bill creates an organization using credentials from account
 // 111111111111, and configures the organization to support only the consolidated billing
 // feature set:
-//
 func ExampleOrganizations_CreateOrganization_shared01() {
 	svc := organizations.New(session.New())
 	input := &organizations.CreateOrganizationInput{
@@ -345,6 +345,8 @@ func ExampleOrganizations_CreateOrganization_shared01() {
 				fmt.Println(organizations.ErrCodeServiceException, aerr.Error())
 			case organizations.ErrCodeTooManyRequestsException:
 				fmt.Println(organizations.ErrCodeTooManyRequestsException, aerr.Error())
+			case organizations.ErrCodeAccessDeniedForDependencyException:
+				fmt.Println(organizations.ErrCodeAccessDeniedForDependencyException, aerr.Error())
 			default:
 				fmt.Println(aerr.Error())
 			}
@@ -363,7 +365,6 @@ func ExampleOrganizations_CreateOrganization_shared01() {
 //
 // The following example shows how to create an OU that is named AccountingOU. The new
 // OU is directly under the root.:
-//
 func ExampleOrganizations_CreateOrganizationalUnit_shared00() {
 	svc := organizations.New(session.New())
 	input := &organizations.CreateOrganizationalUnitInput{
@@ -414,7 +415,6 @@ func ExampleOrganizations_CreateOrganizationalUnit_shared00() {
 // in the policy. The parameter string is escaped with backslashes to ensure that the
 // embedded double quotes in the JSON policy are treated as literals in the parameter,
 // which itself is surrounded by double quotes:
-//
 func ExampleOrganizations_CreatePolicy_shared00() {
 	svc := organizations.New(session.New())
 	input := &organizations.CreatePolicyInput{
@@ -511,7 +511,6 @@ func ExampleOrganizations_DeclineHandshake_shared00() {
 //
 // The following example shows how to delete an OU. The example assumes that you previously
 // removed all accounts and other OUs from the OU:
-//
 func ExampleOrganizations_DeleteOrganizationalUnit_shared00() {
 	svc := organizations.New(session.New())
 	input := &organizations.DeleteOrganizationalUnitInput{
@@ -556,7 +555,6 @@ func ExampleOrganizations_DeleteOrganizationalUnit_shared00() {
 //
 // The following example shows how to delete a policy from an organization. The example
 // assumes that you previously detached the policy from all entities:
-//
 func ExampleOrganizations_DeletePolicy_shared00() {
 	svc := organizations.New(session.New())
 	input := &organizations.DeletePolicyInput{
@@ -665,6 +663,8 @@ func ExampleOrganizations_DescribeCreateAccountStatus_shared00() {
 				fmt.Println(organizations.ErrCodeServiceException, aerr.Error())
 			case organizations.ErrCodeTooManyRequestsException:
 				fmt.Println(organizations.ErrCodeTooManyRequestsException, aerr.Error())
+			case organizations.ErrCodeUnsupportedAPIEndpointException:
+				fmt.Println(organizations.ErrCodeUnsupportedAPIEndpointException, aerr.Error())
 			default:
 				fmt.Println(aerr.Error())
 			}
@@ -1046,6 +1046,8 @@ func ExampleOrganizations_InviteAccountToOrganization_shared00() {
 				fmt.Println(organizations.ErrCodeAccessDeniedException, aerr.Error())
 			case organizations.ErrCodeAWSOrganizationsNotInUseException:
 				fmt.Println(organizations.ErrCodeAWSOrganizationsNotInUseException, aerr.Error())
+			case organizations.ErrCodeAccountOwnerNotVerifiedException:
+				fmt.Println(organizations.ErrCodeAccountOwnerNotVerifiedException, aerr.Error())
 			case organizations.ErrCodeConcurrentModificationException:
 				fmt.Println(organizations.ErrCodeConcurrentModificationException, aerr.Error())
 			case organizations.ErrCodeHandshakeConstraintViolationException:
@@ -1258,6 +1260,8 @@ func ExampleOrganizations_ListCreateAccountStatus_shared00() {
 				fmt.Println(organizations.ErrCodeServiceException, aerr.Error())
 			case organizations.ErrCodeTooManyRequestsException:
 				fmt.Println(organizations.ErrCodeTooManyRequestsException, aerr.Error())
+			case organizations.ErrCodeUnsupportedAPIEndpointException:
+				fmt.Println(organizations.ErrCodeUnsupportedAPIEndpointException, aerr.Error())
 			default:
 				fmt.Println(aerr.Error())
 			}
@@ -1298,6 +1302,8 @@ func ExampleOrganizations_ListCreateAccountStatus_shared01() {
 				fmt.Println(organizations.ErrCodeServiceException, aerr.Error())
 			case organizations.ErrCodeTooManyRequestsException:
 				fmt.Println(organizations.ErrCodeTooManyRequestsException, aerr.Error())
+			case organizations.ErrCodeUnsupportedAPIEndpointException:
+				fmt.Println(organizations.ErrCodeUnsupportedAPIEndpointException, aerr.Error())
 			default:
 				fmt.Println(aerr.Error())
 			}

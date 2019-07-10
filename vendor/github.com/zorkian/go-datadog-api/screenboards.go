@@ -16,36 +16,14 @@ import (
 // struct when we load a screenboard in detail.
 type Screenboard struct {
 	Id                *int               `json:"id,omitempty"`
+	NewId             *string            `json:"new_id,omitempty"`
 	Title             *string            `json:"board_title,omitempty"`
-	Height            *string            `json:"height,omitempty"`
-	Width             *string            `json:"width,omitempty"`
+	Height            *int               `json:"height,omitempty"`
+	Width             *int               `json:"width,omitempty"`
 	Shared            *bool              `json:"shared,omitempty"`
-	Templated         *bool              `json:"templated,omitempty"`
 	TemplateVariables []TemplateVariable `json:"template_variables,omitempty"`
-	Widgets           []Widget           `json:"widgets,omitempty"`
+	Widgets           []Widget           `json:"widgets"`
 	ReadOnly          *bool              `json:"read_only,omitempty"`
-}
-
-//type Widget struct {
-type Widget struct {
-	Default             *string              `json:"default,omitempty"`
-	Name                *string              `json:"name,omitempty"`
-	Prefix              *string              `json:"prefix,omitempty"`
-	TimeseriesWidget    *TimeseriesWidget    `json:"timeseries,omitempty"`
-	QueryValueWidget    *QueryValueWidget    `json:"query_value,omitempty"`
-	EventStreamWidget   *EventStreamWidget   `json:"event_stream,omitempty"`
-	FreeTextWidget      *FreeTextWidget      `json:"free_text,omitempty"`
-	ToplistWidget       *ToplistWidget       `json:"toplist,omitempty"`
-	ImageWidget         *ImageWidget         `json:"image,omitempty"`
-	ChangeWidget        *ChangeWidget        `json:"change,omitempty"`
-	GraphWidget         *GraphWidget         `json:"graph,omitempty"`
-	EventTimelineWidget *EventTimelineWidget `json:"event_timeline,omitempty"`
-	AlertValueWidget    *AlertValueWidget    `json:"alert_value,omitempty"`
-	AlertGraphWidget    *AlertGraphWidget    `json:"alert_graph,omitempty"`
-	HostMapWidget       *HostMapWidget       `json:"hostmap,omitempty"`
-	CheckStatusWidget   *CheckStatusWidget   `json:"check_status,omitempty"`
-	IFrameWidget        *IFrameWidget        `json:"iframe,omitempty"`
-	NoteWidget          *NoteWidget          `json:"frame,omitempty"`
 }
 
 // ScreenboardLite represents a user created screenboard. This is the mini
@@ -62,9 +40,14 @@ type reqGetScreenboards struct {
 }
 
 // GetScreenboard returns a single screenboard created on this account.
-func (client *Client) GetScreenboard(id int) (*Screenboard, error) {
+func (client *Client) GetScreenboard(id interface{}) (*Screenboard, error) {
+	stringId, err := GetStringId(id)
+	if err != nil {
+		return nil, err
+	}
+
 	out := &Screenboard{}
-	if err := client.doJsonRequest("GET", fmt.Sprintf("/v1/screen/%d", id), nil, out); err != nil {
+	if err := client.doJsonRequest("GET", fmt.Sprintf("/v1/screen/%s", stringId), nil, out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -107,7 +90,7 @@ type ScreenShareResponse struct {
 
 // ShareScreenboard shares an existing screenboard, it takes and updates ScreenShareResponse
 func (client *Client) ShareScreenboard(id int, response *ScreenShareResponse) error {
-	return client.doJsonRequest("GET", fmt.Sprintf("/v1/screen/share/%d", id), nil, response)
+	return client.doJsonRequest("POST", fmt.Sprintf("/v1/screen/share/%d", id), nil, response)
 }
 
 // RevokeScreenboard revokes a currently shared screenboard

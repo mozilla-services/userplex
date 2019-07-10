@@ -185,6 +185,8 @@ func (t *templateData) addIdent(x *ast.Ident, receiverType, fieldName string) {
 		zeroValue = "0"
 	case "Status":
 		zeroValue = "0"
+	case "PrecisionT":
+		zeroValue = `""`
 	default:
 		zeroValue = fmt.Sprintf("%s{}", x.String())
 	}
@@ -317,7 +319,7 @@ func ({{.ReceiverVar}} *{{.ReceiverType}}) Get{{.FieldName}}() {{.FieldType}} {
   return *{{.ReceiverVar}}.{{.FieldName}}
 }
 
-// GetOk{{.FieldName}} returns a tuple with the {{.FieldName}} field if it's non-nil, zero value otherwise
+// Get{{.FieldName}}Ok returns a tuple with the {{.FieldName}} field if it's non-nil, zero value otherwise
 // and a boolean to check if the value has been set.
 func ({{.ReceiverVar}} *{{.ReceiverType}}) Get{{.FieldName}}Ok() ({{.FieldType}}, bool){
   if {{.ReceiverVar}} == nil || {{.ReceiverVar}}.{{.FieldName}} == nil {
@@ -335,7 +337,7 @@ func ({{.ReceiverVar}} *{{.ReceiverType}}) Has{{.FieldName}}() bool {
    return false
 }
 
-// Get{{.FieldName}} allocates a new {{.ReceiverVar}}.{{.FieldName}} and returns the pointer to it.
+// Set{{.FieldName}} allocates a new {{.ReceiverVar}}.{{.FieldName}} and returns the pointer to it.
 func ({{.ReceiverVar}} *{{.ReceiverType}}) Set{{.FieldName}}(v {{.FieldType}}) {
   {{.ReceiverVar}}.{{.FieldName}} = &v
 }

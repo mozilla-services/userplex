@@ -13,12 +13,15 @@ mod tests {
     extern crate serde_json;
     extern crate serde_yaml;
 
+    use std::env;
     use std::fs::File;
     use std::io::{Write, Read};
     use tempdir::TempDir;
     use std::process::Command;
     use serde_yaml::Value;
+    use std::path::Path;
     const SOPS_BINARY_PATH: &'static str = "./sops";
+    const KMS_KEY: &'static str = "FUNCTIONAL_TEST_KMS_ARN";
 
     macro_rules! assert_encrypted {
         ($object:expr, $key:expr) => {
@@ -53,6 +56,38 @@ mod tests {
     \"bar\": \"baz\"
 }");
         let output = Command::new(SOPS_BINARY_PATH)
+            .arg("-e")
+            .arg(file_path.clone())
+            .output()
+            .expect("Error running sops");
+        assert!(output.status.success(), "sops didn't exit successfully");
+        let json = &String::from_utf8_lossy(&output.stdout);
+        let data: Value = serde_json::from_str(json).expect("Error parsing sops's JSON output");
+        match data.into() {
+            Value::Mapping(m) => {
+                assert!(m.get(&Value::String("sops".to_owned())).is_some(),
+                        "sops metadata branch not found");
+                assert_encrypted!(&m, Value::String("foo".to_owned()));
+                assert_encrypted!(&m, Value::String("bar".to_owned()));
+            }
+            _ => panic!("sops's JSON output is not an object"),
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn encrypt_json_file_kms() {
+        let kms_arn = env::var(KMS_KEY).expect("Expected $FUNCTIONAL_TEST_KMS_ARN env var to be set");
+
+        let file_path = prepare_temp_file("test_encrypt_kms.json",
+                                          b"{
+    \"foo\": 2,
+    \"bar\": \"baz\"
+}");
+
+        let output = Command::new(SOPS_BINARY_PATH)
+            .arg("--kms")
+            .arg(kms_arn)
             .arg("-e")
             .arg(file_path.clone())
             .output()
@@ -225,6 +260,46 @@ b: ba"#
         }
         panic!("Output YAML does not have the expected structure");
     }
+    
+    #[test]
+    fn set_yaml_file_string() {
+        let file_path = prepare_temp_file("test_set_string.yaml",
+                                          r#"a: 2
+b: ba"#
+                                          .as_bytes());
+        Command::new(SOPS_BINARY_PATH)
+            .arg("-e")
+            .arg("-i")
+            .arg(file_path.clone())
+            .output()
+            .expect("Error running sops");
+        Command::new(SOPS_BINARY_PATH)
+            .arg("-e")
+            .arg("-i")
+            .arg("--set")
+            .arg(r#"["a"] "aaa""#)
+            .arg(file_path.clone())
+            .output()
+            .expect("Error running sops");
+        let output = Command::new(SOPS_BINARY_PATH)
+            .arg("-d")
+            .arg("-i")
+            .arg(file_path.clone())
+            .output()
+            .expect("Error running sops");
+        println!("stdout: {}, stderr: {}",
+                 String::from_utf8_lossy(&output.stdout),
+                 String::from_utf8_lossy(&output.stderr));
+        let mut s = String::new();
+        File::open(file_path).unwrap().read_to_string(&mut s).unwrap();
+        let data: Value = serde_yaml::from_str(&s).expect("Error parsing sops's YAML output");
+        if let Value::Mapping(data) = data {
+            let a = data.get(&Value::String("a".to_owned())).unwrap();
+            assert_eq!(a, &Value::String("aaa".to_owned()));
+        } else {
+            panic!("Output JSON does not have the expected structure");
+        }
+    }
 
     #[test]
     fn decrypt_file_no_mac() {
@@ -357,5 +432,113 @@ b: ba"#
         assert!(output.status
                     .success(),
                 "SOPS failed to decrypt a file that uses multiple keys");
+    }
+
+
+    #[test]
+    fn extract_string() {
+        let file_path = prepare_temp_file("test_extract_string.yaml",
+                                          "multiline: |\n  multi\n  line".as_bytes());
+        let output = Command::new(SOPS_BINARY_PATH)
+            .arg("-i")
+            .arg("-e")
+            .arg(file_path.clone())
+            .output()
+            .expect("Error running sops");
+        assert!(output.status.success(), "SOPS failed to encrypt a file");
+        let output = Command::new(SOPS_BINARY_PATH)
+            .arg("--extract")
+            .arg("[\"multiline\"]")
+            .arg("-d")
+            .arg(file_path.clone())
+            .output()
+            .expect("Error running sops");
+        assert!(output.status
+                    .success(),
+                "SOPS failed to extract");
+
+        assert_eq!(output.stdout, b"multi\nline");
+    }
+
+
+    #[test]
+    fn roundtrip_binary() {
+        let data = b"\"\"{}this_is_binary_data";
+        let file_path = prepare_temp_file("test.binary", data);
+        let output = Command::new(SOPS_BINARY_PATH)
+            .arg("-i")
+            .arg("-e")
+            .arg(file_path.clone())
+            .output()
+            .expect("Error running sops");
+        assert!(output.status.success(),
+                "SOPS failed to encrypt a binary file");
+        let output = Command::new(SOPS_BINARY_PATH)
+            .arg("-d")
+            .arg(file_path.clone())
+            .output()
+            .expect("Error running sops");
+        assert!(output.status
+                    .success(),
+                "SOPS failed to decrypt a binary file");
+        assert_eq!(output.stdout, data);
+    }
+
+    #[test]
+    #[ignore]
+    fn roundtrip_kms_encryption_context() {
+        let kms_arn = env::var(KMS_KEY).expect("Expected $FUNCTIONAL_TEST_KMS_ARN env var to be set");
+
+        let file_path = prepare_temp_file("test_roundtrip_kms_encryption_context.json",
+                                          b"{
+    \"foo\": 2,
+    \"bar\": \"baz\"
+}");
+
+        let output = Command::new(SOPS_BINARY_PATH)
+            .arg("--kms")
+            .arg(kms_arn)
+            .arg("--encryption-context")
+            .arg("foo:bar,one:two")
+            .arg("-i")
+            .arg("-e")
+            .arg(file_path.clone())
+            .output()
+            .expect("Error running sops");
+        assert!(output.status.success(), "sops didn't exit successfully");
+
+        let output = Command::new(SOPS_BINARY_PATH)
+            .arg("-d")
+            .arg(file_path.clone())
+            .output()
+            .expect("Error running sops");
+        assert!(output.status
+                    .success(),
+                "SOPS failed to decrypt a file with KMS Encryption Context");
+        assert!(String::from_utf8_lossy(&output.stdout).contains("foo"));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("baz"));
+    }
+
+    #[test]
+    fn output_flag() {
+        let input_path = prepare_temp_file("test_output_flag.binary", b"foo");
+        let output_path = Path::join(TMP_DIR.path(), "output_flag.txt");
+        let output = Command::new(SOPS_BINARY_PATH)
+            .arg("--output")
+            .arg(&output_path)
+            .arg("-e")
+            .arg(input_path.clone())
+            .output()
+            .expect("Error running sops");
+        assert!(output.status
+                    .success(),
+                "SOPS failed to decrypt a binary file");
+        assert_eq!(output.stdout, &[]);
+        let mut f = File::open(&output_path).expect("output file not found");
+
+        let mut contents = String::new();
+        f.read_to_string(&mut contents)
+            .expect("couldn't read output file contents");
+        assert_ne!(contents, "", "Output file is empty");
     }
 }

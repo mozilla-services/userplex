@@ -31,9 +31,9 @@
 // that does not have a Business or Enterprise support plan causes a SubscriptionRequiredException.
 //
 // For authentication of requests, AWS Health uses the Signature Version 4 Signing
-// Process (http://docs.aws.amazon.com/general/latest/gr/signature-version-4.html).
+// Process (https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html).
 //
-// See the AWS Health User Guide (http://docs.aws.amazon.com/health/latest/ug/what-is-aws-health.html)
+// See the AWS Health User Guide (https://docs.aws.amazon.com/health/latest/ug/what-is-aws-health.html)
 // for information about how to use the API.
 //
 // Service Endpoint
@@ -49,7 +49,7 @@
 //
 // Using the Client
 //
-// To AWS Health APIs and Notifications with the SDK use the New function to create
+// To contact AWS Health APIs and Notifications with the SDK use the New function to create
 // a new service client. With that client you can make API requests to the service.
 // These clients are safe to use concurrently.
 //

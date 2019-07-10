@@ -1,6 +1,122 @@
 Changelog
 =========
 
+3.3.1
+-----
+
+Bug fixes:
+
+* Make sure the pgp key fingerprint is longer than 16 characters before
+  slicing it. (#463)
+* Allow for `--set` value to be a string. (#461)
+
+Project changes:
+
+* Using `develop` as a staging branch to create releases off of. What
+  is in `master` is now the current stable release.
+* Upgrade to using Go 1.12 to build sops
+* Updated all vendored packages
+
+3.3.0
+-----
+
+New features:
+
+* Multi-document support for YAML files
+* Support referencing AWS KMS keys by their alias
+* Support for INI files
+* Support for AWS CLI profiles
+* Comment support in .env files
+* Added vi to the list of known editors
+* Added a way to specify the GPG key server to use through the
+  SOPS_GPG_KEYSERVER environment variable
+
+Bug fixes:
+
+* Now uses $HOME instead of ~ (which didn't work) to find the GPG home
+* Fix panic when vim was not available as an editor, but other
+  alternative editors were
+* Fix issue with AWS KMS Encryption Contexts (#445) with more than one
+  context value failing to decrypt intermittently. Includes an
+  automatic fix for old files affected by this issue.
+
+Project infrastructure changes:
+
+* Added integration tests for AWS KMS
+* Added Code of Conduct
+
+
+3.2.0
+-----
+
+* Added --output flag to write output a file directly instead of
+  through stdout
+* Added support for dotenv files
+
+3.1.1
+-----
+
+* Fix incorrect version number from previous release
+
+3.1.0
+-----
+
+* Add support for Azure Key Service
+
+* Fix bug that prevented JSON escapes in input files from working
+
+3.0.5
+-----
+
+* Prevent files from being encrypted twice
+
+* Fix empty comments not being decrypted correctly
+
+* If keyservicecmd returns an error, log it.
+
+* Initial sops workspace auditing support (still wip)
+
+* Refactor Store interface to reflect operations SOPS performs
+
+3.0.3
+----
+
+* --set now works with nested data structures and not just simple
+  values
+
+* Changed default log level to warn instead of info
+
+* Avoid creating empty files when using the editor mode to create new
+  files and not making any changes to the example files
+
+* Output unformatted strings when using --extract instead of encoding
+  them to yaml
+
+* Allow forcing binary input and output types from command line flags
+
+* Deprecate filename_regex in favor of path_regex. filename_regex had
+  a bug and matched on the whole file path, when it should have only
+  matched on the file name. path_regex on the other hand is documented
+  to match on the whole file path.
+
+* Add an encrypted-suffix option, the exact opposite of
+  unencrypted-suffix
+
+* Allow specifying unencrypted_suffix and encrypted_suffix rules in
+  the .sops.yaml configuration file
+
+* Introduce key service flag optionally prompting users on
+  encryption/decryption
+
+3.0.1
+-----
+
+* Don't consider io.EOF returned by Decoder.Token as error
+
+* add IsBinary: true to FileHints when encoding with crypto/openpgp 
+
+* some improvements to error messages
+
 3.0.0
 -----
 
