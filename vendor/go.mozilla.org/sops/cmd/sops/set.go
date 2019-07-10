@@ -23,7 +23,13 @@ type setOpts struct {
 func set(opts setOpts) ([]byte, error) {
 	// Load the file
 	// TODO: Issue #173: if the file does not exist, create it with the contents passed in as opts.Value
-	tree, err := common.LoadEncryptedFile(opts.InputStore, opts.InputPath)
+	tree, err := common.LoadEncryptedFileWithBugFixes(common.GenericDecryptOpts{
+		Cipher:      opts.Cipher,
+		InputStore:  opts.InputStore,
+		InputPath:   opts.InputPath,
+		IgnoreMAC:   opts.IgnoreMAC,
+		KeyServices: opts.KeyServices,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -40,14 +46,7 @@ func set(opts setOpts) ([]byte, error) {
 	}
 
 	// Set the value
-	key := opts.TreePath[len(opts.TreePath)-1]
-	path := opts.TreePath[:len(opts.TreePath)-1]
-	parent, err := tree.Branch.Truncate(path)
-	if err != nil {
-		return nil, common.NewExitError("Could not truncate tree to the provided path", codes.ErrorInvalidSetFormat)
-	}
-	branch := parent.(sops.TreeBranch)
-	tree.Branch = branch.InsertOrReplaceValue(key, opts.Value)
+	tree.Branches[0] = tree.Branches[0].Set(opts.TreePath, opts.Value)
 
 	err = common.EncryptTree(common.EncryptTreeOpts{
 		DataKey: dataKey, Tree: tree, Cipher: opts.Cipher,
@@ -56,7 +55,7 @@ func set(opts setOpts) ([]byte, error) {
 		return nil, err
 	}
 
-	encryptedFile, err := opts.OutputStore.MarshalWithMetadata(tree.Branch, tree.Metadata)
+	encryptedFile, err := opts.OutputStore.EmitEncryptedFile(*tree)
 	if err != nil {
 		return nil, common.NewExitError(fmt.Sprintf("Could not marshal tree: %s", err), codes.ErrorDumpingTree)
 	}

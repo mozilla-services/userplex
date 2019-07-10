@@ -25,11 +25,18 @@ func (f *TextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 func NewLogger(name string) *logrus.Logger {
 	log := logrus.New()
+	log.SetLevel(logrus.WarnLevel)
 	log.Formatter = &TextFormatter{
 		LoggerName: name,
 	}
 	Loggers[name] = log
 	return log
+}
+
+func SetLevel(level logrus.Level) {
+	for k := range Loggers {
+		Loggers[k].SetLevel(level)
+	}
 }
 
 var Loggers map[string]*logrus.Logger

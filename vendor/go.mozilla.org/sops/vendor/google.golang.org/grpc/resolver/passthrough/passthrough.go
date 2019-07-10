@@ -17,8 +17,7 @@
  */
 
 // Package passthrough implements a pass-through resolver. It sends the target
-// name without scheme back to gRPC as resolved address. It's for gRPC internal
-// test only.
+// name without scheme back to gRPC as resolved address.
 package passthrough
 
 import "google.golang.org/grpc/resolver"
@@ -46,7 +45,7 @@ type passthroughResolver struct {
 }
 
 func (r *passthroughResolver) start() {
-	r.cc.NewAddress([]resolver.Address{{Addr: r.target.Endpoint}})
+	r.cc.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: r.target.Endpoint}}})
 }
 
 func (*passthroughResolver) ResolveNow(o resolver.ResolveNowOption) {}

@@ -41,6 +41,8 @@ func (s *RepositoriesService) ListCollaborators(ctx context.Context, owner, repo
 		return nil, nil, err
 	}
 
+	req.Header.Set("Accept", mediaTypeNestedTeamsPreview)
+
 	var users []*User
 	resp, err := s.client.Do(ctx, req, &users)
 	if err != nil {
@@ -117,9 +119,6 @@ func (s *RepositoriesService) AddCollaborator(ctx context.Context, owner, repo, 
 	if err != nil {
 		return nil, err
 	}
-
-	// TODO: remove custom Accept header when this API fully launches.
-	req.Header.Set("Accept", mediaTypeRepositoryInvitationsPreview)
 
 	return s.client.Do(ctx, req, nil)
 }

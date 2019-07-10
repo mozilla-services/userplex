@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"go.mozilla.org/sops"
+	"go.mozilla.org/sops/audit"
 	"go.mozilla.org/sops/cmd/sops/codes"
 	"go.mozilla.org/sops/cmd/sops/common"
 	"go.mozilla.org/sops/keys"
@@ -22,10 +23,20 @@ type rotateOpts struct {
 }
 
 func rotate(opts rotateOpts) ([]byte, error) {
-	tree, err := common.LoadEncryptedFile(opts.InputStore, opts.InputPath)
+	tree, err := common.LoadEncryptedFileWithBugFixes(common.GenericDecryptOpts{
+		Cipher:      opts.Cipher,
+		InputStore:  opts.InputStore,
+		InputPath:   opts.InputPath,
+		IgnoreMAC:   opts.IgnoreMAC,
+		KeyServices: opts.KeyServices,
+	})
 	if err != nil {
 		return nil, err
 	}
+
+	audit.SubmitEvent(audit.RotateEvent{
+		File: tree.FilePath,
+	})
 
 	dataKey, err := common.DecryptTree(common.DecryptTreeOpts{
 		Cipher: opts.Cipher, IgnoreMac: opts.IgnoreMAC, Tree: tree,
@@ -65,7 +76,7 @@ func rotate(opts rotateOpts) ([]byte, error) {
 		return nil, err
 	}
 
-	encryptedFile, err := opts.OutputStore.MarshalWithMetadata(tree.Branch, tree.Metadata)
+	encryptedFile, err := opts.OutputStore.EmitEncryptedFile(*tree)
 	if err != nil {
 		return nil, common.NewExitError(fmt.Sprintf("Could not marshal tree: %s", err), codes.ErrorDumpingTree)
 	}

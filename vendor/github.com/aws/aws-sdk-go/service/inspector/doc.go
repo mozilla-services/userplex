@@ -4,8 +4,8 @@
 // requests to Amazon Inspector.
 //
 // Amazon Inspector enables you to analyze the behavior of your AWS resources
-// and to identify potential security issues. For more information, see  Amazon
-// Inspector User Guide (http://docs.aws.amazon.com/inspector/latest/userguide/inspector_introduction.html).
+// and to identify potential security issues. For more information, see Amazon
+// Inspector User Guide (https://docs.aws.amazon.com/inspector/latest/userguide/inspector_introduction.html).
 //
 // See https://docs.aws.amazon.com/goto/WebAPI/inspector-2016-02-16 for more information on this service.
 //
@@ -14,7 +14,7 @@
 //
 // Using the Client
 //
-// To Amazon Inspector with the SDK use the New function to create
+// To contact Amazon Inspector with the SDK use the New function to create
 // a new service client. With that client you can make API requests to the service.
 // These clients are safe to use concurrently.
 //

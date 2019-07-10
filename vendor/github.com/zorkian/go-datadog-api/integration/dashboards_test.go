@@ -4,12 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/zorkian/go-datadog-api"
 )
-
-func init() {
-	client = initTest()
-}
 
 func TestDashboardCreateAndDelete(t *testing.T) {
 	expected := getTestDashboard(createGraph)
@@ -115,6 +112,51 @@ func TestDashboardCreateWithCustomGraph(t *testing.T) {
 	assertDashboardEquals(t, actual, expected)
 }
 
+func TestDashboardGetWithNewId(t *testing.T) {
+	expected := getTestDashboard(createGraph)
+	// create the dashboard and compare it
+	actual, err := client.CreateDashboard(expected)
+	if err != nil {
+		t.Fatalf("Creating a dashboard failed when it shouldn't. (%s)", err)
+	}
+
+	defer cleanUpDashboard(t, *actual.Id)
+
+	assertDashboardEquals(t, actual, expected)
+
+	// try to fetch it freshly using the new id format and compare it again
+	actualWithNewId, err := client.GetDashboard(*actual.NewId)
+	if err != nil {
+		t.Fatalf("Retrieving a dashboard failed when it shouldn't. (%s)", err)
+	}
+	assertDashboardEquals(t, actualWithNewId, expected)
+
+	// the ids are equal whether fetching using the old or the new id
+	assert.Equal(t, *actualWithNewId.Id, *actual.Id)
+
+	// try to fetch it freshly using a string, but with a wrong value
+	actual, err = client.GetDashboard("random_string")
+	if assert.NotNil(t, err) {
+		// it should not fail because of the id format
+		assert.NotContains(t, err.Error(), "unsupported id type")
+		assert.Contains(t, err.Error(), "404")
+	}
+
+	// try to fetch it freshly using a boolean
+	actual, err = client.GetDashboard(true)
+	if assert.NotNil(t, err) {
+		// it should fail because of the id format
+		assert.Contains(t, err.Error(), "unsupported id type")
+	}
+
+	// try to fetch it freshly using a float64
+	actual, err = client.GetDashboard(5.5)
+	if assert.NotNil(t, err) {
+		// it should fail because of the id format
+		assert.Contains(t, err.Error(), "unsupported id type")
+	}
+}
+
 func getTestDashboard(createGraph func() []datadog.Graph) *datadog.Dashboard {
 	return &datadog.Dashboard{
 		Title:             datadog.String("___Test-Board___"),
@@ -189,13 +231,18 @@ func createAdvancedTimeseriesGraph() []datadog.Graph {
 
 func createCustomGraph() []datadog.Graph {
 	gd := &datadog.GraphDefinition{}
-	gd.SetViz("query_value")
+	gd.SetViz("timeseries")
 
 	r := gd.Requests
 	gd.Requests = append(r, datadog.GraphDefinitionRequest{
 		Query:      datadog.String("( sum:system.mem.used{*} / sum:system.mem.free{*} ) * 100"),
 		Stacked:    datadog.Bool(false),
 		Aggregator: datadog.String("avg"),
+		Metadata: map[string]datadog.GraphDefinitionMetadata{
+			"(sum:system.mem.used{*}/sum:system.mem.free{*})*100": {
+				Alias: datadog.String("mem_used_ratio"),
+			},
+		},
 		ConditionalFormats: []datadog.DashboardConditionalFormat{
 			{
 				Comparator: datadog.String(">"),

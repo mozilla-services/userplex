@@ -1,6 +1,7 @@
 package pagerduty
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/go-querystring/query"
@@ -41,6 +42,8 @@ type Incident struct {
 	Teams                []APIObject       `json:"teams,omitempty"`
 	Urgency              string            `json:"urgency,omitempty"`
 	Status               string            `json:"status,omitempty"`
+	Id                   string            `json:"id,omitempty"`
+	Priority             APIObject         `json:"priority,omitempty"`
 }
 
 // ListIncidentsResponse is the response structure when calling the ListIncident API endpoint.
@@ -78,6 +81,45 @@ func (c *Client) ListIncidents(o ListIncidentsOptions) (*ListIncidentsResponse, 
 	}
 	var result ListIncidentsResponse
 	return &result, c.decodeJSON(resp, &result)
+}
+
+// CreateIncident is the structure POST'd to the incidents endpoint. It wraps a CreateIncidentValue
+type CreateIncident struct {
+	Incident CreateIncidentOptions `json:"incident"`
+}
+
+// createIncidentResponse is returned from the API when creating a response.
+type createIncidentResponse struct {
+	Incident Incident `json:incident`
+}
+
+// CreateIncidentOptions is the structure used when POSTing to the CreateIncident API endpoint.
+type CreateIncidentOptions struct {
+	Type             string       `json:"type"`
+	Title            string       `json:"title"`
+	Service          APIReference `json:"service"`
+	Priority         APIReference `json:"priority"`
+	IncidentKey      string       `json:"incident_key"`
+	Body             APIDetails   `json:"body"`
+	EscalationPolicy APIReference `json:"escalation_policy"`
+}
+
+// CreateIncident creates an incident synchronously without a corresponding event from a monitoring service.
+func (c *Client) CreateIncident(from string, i *CreateIncident) (*Incident, error) {
+	headers := make(map[string]string)
+	headers["From"] = from
+	resp, e := c.post("/incidents", i, &headers)
+	if e != nil {
+		return nil, e
+	}
+
+	var ii createIncidentResponse
+	e = json.NewDecoder(resp.Body).Decode(&ii)
+	if e != nil {
+		return nil, e
+	}
+
+	return &ii.Incident, nil
 }
 
 // ManageIncidents acknowledges, resolves, escalates, or reassigns one or more incidents.
@@ -132,11 +174,36 @@ func (c *Client) ListIncidentNotes(id string) ([]IncidentNote, error) {
 	return notes, nil
 }
 
+// IncidentAlert is a alert for the specified incident.
+type IncidentAlert struct {
+	ID        string    `json:"id,omitempty"`
+	Summary	  string    `json:"summary,omitempty"`
+	CreatedAt string    `json:"created_at,omitempty"`
+	AlertKey  string    `json:"alert_key,omitempty"`
+}
+
+// ListIncidentAlerts lists existing alerts for the specified incident.
+func (c *Client) ListIncidentAlerts(id string) ([]IncidentAlert, error) {
+	resp, err := c.get("/incidents/"+id+"/alerts")
+	if err != nil {
+		return nil, err
+	}
+	var result map[string][]IncidentAlert
+	if err := c.decodeJSON(resp, &result); err != nil {
+		return nil, err
+	}
+	alerts, ok := result["alerts"]
+	if !ok {
+		return nil, fmt.Errorf("JSON response does not have alerts field")
+	}
+	return alerts, nil
+}
+
 // CreateIncidentNote creates a new note for the specified incident.
 func (c *Client) CreateIncidentNote(id string, note IncidentNote) error {
 	data := make(map[string]IncidentNote)
 	data["note"] = note
-	_, err := c.post("/incidents/"+id+"/notes", data)
+	_, err := c.post("/incidents/"+id+"/notes", data, nil)
 	return err
 }
 
@@ -144,7 +211,7 @@ func (c *Client) CreateIncidentNote(id string, note IncidentNote) error {
 func (c *Client) SnoozeIncident(id string, duration uint) error {
 	data := make(map[string]uint)
 	data["duration"] = duration
-	_, err := c.post("/incidents/"+id+"/snooze", data)
+	_, err := c.post("/incidents/"+id+"/snooze", data, nil)
 	return err
 }
 

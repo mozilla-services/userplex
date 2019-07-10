@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"go/format"
@@ -22,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"google.golang.org/api/google-api-go-generator/internal/disco"
@@ -29,13 +31,13 @@ import (
 
 const (
 	googleDiscoveryURL = "https://www.googleapis.com/discovery/v1/apis"
-	generatorVersion   = "20170210"
+	generatorVersion   = "2018018"
 )
 
 var (
 	apiToGenerate = flag.String("api", "*", "The API ID to generate, like 'tasks:v1'. A value of '*' means all.")
 	useCache      = flag.Bool("cache", true, "Use cache of discovered Google API discovery documents.")
-	genDir        = flag.String("gendir", "", "Directory to use to write out generated Go files")
+	genDir        = flag.String("gendir", defaultGenDir(), "Directory to use to write out generated Go files")
 	build         = flag.Bool("build", false, "Compile generated packages.")
 	install       = flag.Bool("install", false, "Install generated packages.")
 	apisURL       = flag.String("discoveryurl", googleDiscoveryURL, "URL to root discovery document")
@@ -48,10 +50,12 @@ var (
 	baseURL        = flag.String("base_url", "", "(optional) Override the default service API URL. If empty, the service's root URL will be used.")
 	headerPath     = flag.String("header_path", "", "If non-empty, prepend the contents of this file to generated services.")
 
-	contextHTTPPkg = flag.String("ctxhttp_pkg", "golang.org/x/net/context/ctxhttp", "Go package path of the 'ctxhttp' package.")
-	contextPkg     = flag.String("context_pkg", "golang.org/x/net/context", "Go package path of the 'context' package.")
-	gensupportPkg  = flag.String("gensupport_pkg", "google.golang.org/api/gensupport", "Go package path of the 'api/gensupport' support package.")
-	googleapiPkg   = flag.String("googleapi_pkg", "google.golang.org/api/googleapi", "Go package path of the 'api/googleapi' support package.")
+	gensupportPkg = flag.String("gensupport_pkg", "google.golang.org/api/gensupport", "Go package path of the 'api/gensupport' support package.")
+	googleapiPkg  = flag.String("googleapi_pkg", "google.golang.org/api/googleapi", "Go package path of the 'api/googleapi' support package.")
+	optionPkg     = flag.String("option_pkg", "google.golang.org/api/option", "Go package path of the 'api/option' support package.")
+	htransportPkg = flag.String("htransport_pkg", "google.golang.org/api/transport/http", "Go package path of the 'api/transport/http' support package.")
+
+	copyrightYear = flag.String("copyright_year", fmt.Sprintf("%d", time.Now().Year()), "Year for copyright.")
 
 	serviceTypes = []string{"Service", "APIService"}
 )
@@ -132,11 +136,11 @@ func main() {
 		matches = append(matches, api)
 		log.Printf("Generating API %s", api.ID)
 		err := api.WriteGeneratedCode()
-		if err != nil {
+		if err != nil && err != errNoDoc {
 			errors = append(errors, &generateError{api, err})
 			continue
 		}
-		if *build {
+		if *build && err == nil {
 			var args []string
 			if *install {
 				args = append(args, "install")
@@ -158,7 +162,7 @@ func main() {
 	if len(errors) > 0 {
 		log.Printf("%d API(s) failed to generate or compile:", len(errors))
 		for _, ce := range errors {
-			log.Printf(ce.Error())
+			log.Println(ce.Error())
 		}
 		os.Exit(1)
 	}
@@ -309,6 +313,10 @@ func slurpURL(urlStr string) []byte {
 	if err != nil {
 		log.Fatalf("Error fetching URL %s: %v", urlStr, err)
 	}
+	if res.StatusCode >= 300 {
+		log.Printf("WARNING: URL %s served status code %d", urlStr, res.StatusCode)
+		return nil
+	}
 	bs, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		log.Fatalf("Error reading body of URL %s: %v", urlStr, err)
@@ -361,12 +369,17 @@ func (p *namePool) Get(preferred string) string {
 }
 
 func genDirRoot() string {
-	if *genDir != "" {
-		return *genDir
+	if *genDir == "" {
+		log.Fatalf("-gendir option must be set.")
 	}
+	return *genDir
+}
+
+func defaultGenDir() string {
+	// TODO(cbro): consider using $CWD
 	paths := filepath.SplitList(os.Getenv("GOPATH"))
 	if len(paths) == 0 {
-		log.Fatalf("No GOPATH set.")
+		return ""
 	}
 	return filepath.Join(paths[0], "src", "google.golang.org", "api")
 }
@@ -435,27 +448,53 @@ func (a *API) needsDataWrapper() bool {
 }
 
 func (a *API) jsonBytes() []byte {
-	if v := a.forceJSON; v != nil {
-		return v
-	}
-	if *useCache {
-		slurp, err := ioutil.ReadFile(a.JSONFile())
-		if err != nil {
-			log.Fatal(err)
+	if a.forceJSON == nil {
+		var slurp []byte
+		var err error
+		if *useCache {
+			slurp, err = ioutil.ReadFile(a.JSONFile())
+			if err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			slurp = slurpURL(a.DiscoveryURL())
+			if slurp != nil {
+				// Make sure that keys are sorted by re-marshalling.
+				d := make(map[string]interface{})
+				json.Unmarshal(slurp, &d)
+				if err != nil {
+					log.Fatal(err)
+				}
+				var err error
+				slurp, err = json.MarshalIndent(d, "", "  ")
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
 		}
-		return slurp
+		a.forceJSON = slurp
 	}
-	return slurpURL(a.DiscoveryURL())
+	return a.forceJSON
 }
 
 func (a *API) JSONFile() string {
 	return filepath.Join(a.SourceDir(), a.Package()+"-api.json")
 }
 
+var errNoDoc = errors.New("could not read discovery doc")
+
+// WriteGeneratedCode generates code for a.
+// It returns errNoDoc if we couldn't read the discovery doc.
 func (a *API) WriteGeneratedCode() error {
 	genfilename := *output
+	jsonBytes := a.jsonBytes()
+	// Skip generation if we don't have the discovery doc.
+	if jsonBytes == nil {
+		// No message here, because slurpURL printed one.
+		return errNoDoc
+	}
 	if genfilename == "" {
-		if err := writeFile(a.JSONFile(), a.jsonBytes()); err != nil {
+		if err := writeFile(a.JSONFile(), jsonBytes); err != nil {
 			return err
 		}
 		outdir := a.SourceDir()
@@ -472,7 +511,10 @@ func (a *API) WriteGeneratedCode() error {
 	if err == nil {
 		err = errw
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 var docsLink string
@@ -519,44 +561,86 @@ func (a *API) GenerateCode() ([]byte, error) {
 		}
 	}
 
+	pn(`// Copyright %s Google LLC.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Code generated file. DO NOT EDIT.
+`, *copyrightYear)
+
 	pn("// Package %s provides access to the %s.", pkg, a.doc.Title)
+	if r := replacementPackage[pkg]; r != "" {
+		pn("//")
+		pn("// This package is DEPRECATED. Use package %s instead.", r)
+	}
 	docsLink = a.doc.DocumentationLink
 	if docsLink != "" {
 		pn("//")
-		pn("// See %s", docsLink)
+		pn("// For product documentation, see: %s", docsLink)
 	}
-	pn("//\n// Usage example:")
+	pn("//")
+	pn("// Creating a client")
+	pn("//")
+	pn("// Usage example:")
 	pn("//")
 	pn("//   import %q", a.Target())
 	pn("//   ...")
-	pn("//   %sService, err := %s.New(oauthHttpClient)", pkg, pkg)
-
+	pn("//   ctx := context.Background()")
+	pn("//   %sService, err := %s.NewService(ctx)", pkg, pkg)
+	pn("//")
+	pn("// In this example, Google Application Default Credentials are used for authentication.")
+	pn("//")
+	pn("// For information on how to create and obtain Application Default Credentials, see https://developers.google.com/identity/protocols/application-default-credentials.")
+	pn("//")
+	pn("// Other authentication options")
+	pn("//")
+	if len(a.doc.Auth.OAuth2Scopes) > 1 {
+		pn(`// By default, all available scopes (see "Constants") are used to authenticate. To restrict scopes, use option.WithScopes:`)
+		pn("//")
+		// NOTE: the first scope tends to be the broadest. Use the last one to demonstrate restriction.
+		pn("//   %sService, err := %s.NewService(ctx, option.WithScopes(%s.%s))", pkg, pkg, pkg, scopeIdentifierFromURL(a.doc.Auth.OAuth2Scopes[len(a.doc.Auth.OAuth2Scopes)-1].URL))
+		pn("//")
+	}
+	pn("// To use an API key for authentication (note: some APIs do not support API keys), use option.WithAPIKey:")
+	pn("//")
+	pn(`//   %sService, err := %s.NewService(ctx, option.WithAPIKey("AIza..."))`, pkg, pkg)
+	pn("//")
+	pn("// To use an OAuth token (e.g., a user token obtained via a three-legged OAuth flow), use option.WithTokenSource:")
+	pn("//")
+	pn("//   config := &oauth2.Config{...}")
+	pn("//   // ...")
+	pn("//   token, err := config.Exchange(ctx, ...)")
+	pn("//   %sService, err := %s.NewService(ctx, option.WithTokenSource(config.TokenSource(ctx, token)))", pkg, pkg)
+	pn("//")
+	pn("// See https://godoc.org/google.golang.org/api/option/ for details on options.")
 	pn("package %s // import %q", pkg, a.Target())
 	p("\n")
 	pn("import (")
+	for _, imp := range []string{
+		"bytes",
+		"context",
+		"encoding/json",
+		"errors",
+		"fmt",
+		"io",
+		"net/http",
+		"net/url",
+		"strconv",
+		"strings",
+	} {
+		pn("  %q", imp)
+	}
+	pn("")
 	for _, imp := range []struct {
 		pkg   string
 		lname string
 	}{
-		{"bytes", ""},
-		{"encoding/json", ""},
-		{"errors", ""},
-		{"fmt", ""},
-		{"io", ""},
-		{"net/http", ""},
-		{"net/url", ""},
-		{"strconv", ""},
-		{"strings", ""},
-		{*contextHTTPPkg, "ctxhttp"},
-		{*contextPkg, "context"},
 		{*gensupportPkg, "gensupport"},
 		{*googleapiPkg, "googleapi"},
+		{*optionPkg, "option"},
+		{*htransportPkg, "htransport"},
 	} {
-		if imp.lname == "" {
-			pn("  %q", imp.pkg)
-		} else {
-			pn("  %s %q", imp.lname, imp.pkg)
-		}
+		pn("  %s %q", imp.lname, imp.pkg)
 	}
 	pn(")")
 	pn("\n// Always reference these packages, just in case the auto-generated code")
@@ -572,7 +656,6 @@ func (a *API) GenerateCode() ([]byte, error) {
 	pn("var _ = errors.New")
 	pn("var _ = strings.Replace")
 	pn("var _ = context.Canceled")
-	pn("var _ = ctxhttp.Do")
 	pn("")
 	pn("const apiId = %q", a.doc.ID)
 	pn("const apiName = %q", a.doc.Name)
@@ -588,11 +671,35 @@ func (a *API) GenerateCode() ([]byte, error) {
 	a.GetName("New")
 	a.GetName(service)
 
+	pn("// NewService creates a new %s.", service)
+	pn("func NewService(ctx context.Context, opts ...option.ClientOption) (*%s, error) {", service)
+	if len(a.doc.Auth.OAuth2Scopes) != 0 {
+		pn("scopesOption := option.WithScopes(")
+		for _, scope := range a.doc.Auth.OAuth2Scopes {
+			pn("%q,", scope.URL)
+		}
+		pn(")")
+		pn("// NOTE: prepend, so we don't override user-specified scopes.")
+		pn("opts = append([]option.ClientOption{scopesOption}, opts...)")
+	}
+	pn("client, endpoint, err := htransport.NewClient(ctx, opts...)")
+	pn("if err != nil { return nil, err }")
+	pn("s, err := New(client)")
+	pn("if err != nil { return nil, err }")
+	pn(`if endpoint != "" { s.BasePath = endpoint }`)
+	pn("return s, nil")
+	pn("}\n")
+
+	pn("// New creates a new %s. It uses the provided http.Client for requests.", service)
+	pn("//")
+	pn("// Deprecated: please use NewService instead.")
+	pn("// To provide a custom HTTP client, use option.WithHTTPClient.")
+	pn("// If you are using google.golang.org/api/googleapis/transport.APIKey, use option.WithAPIKey with NewService instead.")
 	pn("func New(client *http.Client) (*%s, error) {", service)
 	pn("if client == nil { return nil, errors.New(\"client is nil\") }")
 	pn("s := &%s{client: client, BasePath: basePath}", service)
 	for _, res := range a.doc.Resources { // add top level resources.
-		pn("s.%s = New%s(s)", resourceGoField(res), resourceGoType(res))
+		pn("s.%s = New%s(s)", resourceGoField(res, nil), resourceGoType(res))
 	}
 	pn("return s, nil")
 	pn("}")
@@ -603,7 +710,7 @@ func (a *API) GenerateCode() ([]byte, error) {
 	pn(" UserAgent string // optional additional User-Agent fragment")
 
 	for _, res := range a.doc.Resources {
-		pn("\n\t%s\t*%s", resourceGoField(res), resourceGoType(res))
+		pn("\n\t%s\t*%s", resourceGoField(res, nil), resourceGoType(res))
 	}
 	pn("}")
 	pn("\nfunc (s *%s) userAgent() string {", service)
@@ -765,8 +872,13 @@ type fieldName struct {
 // This makes it possible to distinguish between a field being unset vs having
 // an empty value.
 var pointerFields = []fieldName{
+	{api: "androidpublisher:v1.1", schema: "InappPurchase", field: "PurchaseType"},
+	{api: "androidpublisher:v2", schema: "ProductPurchase", field: "PurchaseType"},
+	{api: "androidpublisher:v3", schema: "ProductPurchase", field: "PurchaseType"},
 	{api: "androidpublisher:v2", schema: "SubscriptionPurchase", field: "CancelReason"},
 	{api: "androidpublisher:v2", schema: "SubscriptionPurchase", field: "PaymentState"},
+	{api: "androidpublisher:v2", schema: "SubscriptionPurchase", field: "PurchaseType"},
+	{api: "androidpublisher:v3", schema: "SubscriptionPurchase", field: "PurchaseType"},
 	{api: "cloudmonitoring:v2beta2", schema: "Point", field: "BoolValue"},
 	{api: "cloudmonitoring:v2beta2", schema: "Point", field: "DoubleValue"},
 	{api: "cloudmonitoring:v2beta2", schema: "Point", field: "Int64Value"},
@@ -1019,7 +1131,7 @@ func (s *Schema) populateSubSchemas() (outerr error) {
 			case disco.StructKind:
 				addSubStruct(subApiName, p.Type())
 			default:
-				panicf("Unknown type for %q: %s", subApiName, p.Type())
+				panicf("Unknown type for %q: %v", subApiName, p.Type())
 			}
 		}
 	case disco.ArrayKind:
@@ -1040,7 +1152,7 @@ func (s *Schema) populateSubSchemas() (outerr error) {
 		case disco.StructKind:
 			addSubStruct(subApiName, at)
 		default:
-			panicf("Unknown array type for %q: %s", subApiName, at)
+			panicf("Unknown array type for %q: %v", subApiName, at)
 		}
 	case disco.AnyStructKind, disco.MapKind, disco.SimpleKind, disco.ReferenceKind:
 		// Do nothing.
@@ -1238,9 +1350,9 @@ func (s *Schema) writeSchemaStruct(api *API) {
 // by listing them in the field identified by nullFieldsName.
 func (s *Schema) writeSchemaMarshal(forceSendFieldName, nullFieldsName string) {
 	s.api.pn("func (s *%s) MarshalJSON() ([]byte, error) {", s.GoName())
-	s.api.pn("\ttype noMethod %s", s.GoName())
+	s.api.pn("\ttype NoMethod %s", s.GoName())
 	// pass schema as methodless type to prevent subsequent calls to MarshalJSON from recursing indefinitely.
-	s.api.pn("\traw := noMethod(*s)")
+	s.api.pn("\traw := NoMethod(*s)")
 	s.api.pn("\treturn gensupport.MarshalJSON(raw, s.%s, s.%s)", forceSendFieldName, nullFieldsName)
 	s.api.pn("}")
 }
@@ -1257,7 +1369,7 @@ func (s *Schema) writeSchemaUnmarshal() {
 	}
 	pn := s.api.pn
 	pn("\nfunc (s *%s) UnmarshalJSON(data []byte) error {", s.GoName())
-	pn("  type noMethod %s", s.GoName()) // avoid infinite recursion
+	pn("  type NoMethod %s", s.GoName()) // avoid infinite recursion
 	pn("  var s1 struct {")
 	// Hide the float64 fields of the schema with fields that correctly
 	// unmarshal special values.
@@ -1268,10 +1380,10 @@ func (s *Schema) writeSchemaUnmarshal() {
 		}
 		pn("%s %s `json:\"%s\"`", p.assignedGoName, typ, p.p.Name)
 	}
-	pn("    *noMethod") // embed the schema
+	pn("    *NoMethod") // embed the schema
 	pn("  }")
 	// Set the schema value into the wrapper so its other fields are unmarshaled.
-	pn("  s1.noMethod = (*noMethod)(s)")
+	pn("  s1.NoMethod = (*NoMethod)(s)")
 	pn("  if err := json.Unmarshal(data, &s1); err != nil {")
 	pn("    return err")
 	pn("  }")
@@ -1328,7 +1440,7 @@ func (a *API) generateResource(r *disco.Resource) {
 	pn(fmt.Sprintf("func New%s(s *%s) *%s {", t, a.ServiceType(), t))
 	pn("rs := &%s{s : s}", t)
 	for _, res := range r.Resources {
-		pn("rs.%s = New%s(s)", resourceGoField(res), resourceGoType(res))
+		pn("rs.%s = New%s(s)", resourceGoField(res, r), resourceGoType(res))
 	}
 	pn("return rs")
 	pn("}")
@@ -1336,7 +1448,7 @@ func (a *API) generateResource(r *disco.Resource) {
 	pn("\ntype %s struct {", t)
 	pn(" s *%s", a.ServiceType())
 	for _, res := range r.Resources {
-		pn("\n\t%s\t*%s", resourceGoField(res), resourceGoType(res))
+		pn("\n\t%s\t*%s", resourceGoField(res, r), resourceGoType(res))
 	}
 	pn("}")
 
@@ -1363,8 +1475,19 @@ func (a *API) generateResourceMethods(r *disco.Resource) {
 	}
 }
 
-func resourceGoField(r *disco.Resource) string {
-	return initialCap(r.Name)
+func resourceGoField(r, parent *disco.Resource) string {
+	// Avoid conflicts with method names.
+	und := ""
+	if parent != nil {
+		for _, m := range parent.Methods {
+			if m.Name == r.Name {
+				und = "_"
+				break
+			}
+		}
+	}
+	// Note: initialCap(r.Name + "_") doesn't work because initialCap calls depunct.
+	return initialCap(r.Name) + und
 }
 
 func resourceGoType(r *disco.Resource) string {
@@ -1388,7 +1511,7 @@ type Method struct {
 	r   *disco.Resource // or nil if a API-level (top-level) method
 	m   *disco.Method
 
-	params []*Param // all Params, of each type, lazily set by first access to Parameters
+	params []*Param // all Params, of each type, lazily set by first call of Params method.
 }
 
 func (m *Method) Id() string {
@@ -1570,6 +1693,9 @@ func (meth *Method) generateCode() {
 	pn("\n// method id %q:", meth.Id())
 
 	retType := responseType(a, meth.m)
+	if meth.IsRawResponse() {
+		retType = "*http.Response"
+	}
 	retTypeComma := retType
 	if retTypeComma != "" {
 		retTypeComma += ", "
@@ -1795,16 +1921,28 @@ func (meth *Method) generateCode() {
 		pn("}")
 	}
 	pn("var body io.Reader = nil")
-	if ba := args.bodyArg(); ba != nil && httpMethod != "GET" {
-		style := "WithoutDataWrapper"
-		if a.needsDataWrapper() {
-			style = "WithDataWrapper"
+	if meth.IsRawRequest() {
+		pn("body = c.body_")
+	} else {
+		if ba := args.bodyArg(); ba != nil && httpMethod != "GET" {
+			if meth.m.ID == "ml.projects.predict" {
+				// TODO(cbro): move ML API to rawHTTP (it will be a breaking change)
+				// Skip JSONReader for APIs that require clients to pass in JSON already.
+				pn("body = strings.NewReader(c.%s.HttpBody.Data)", ba.goname)
+			} else {
+				style := "WithoutDataWrapper"
+				if a.needsDataWrapper() {
+					style = "WithDataWrapper"
+				}
+				pn("body, err := googleapi.%s.JSONReader(c.%s)", style, ba.goname)
+				pn("if err != nil { return nil, err }")
+			}
+
+			pn(`reqHeaders.Set("Content-Type", "application/json")`)
 		}
-		pn("body, err := googleapi.%s.JSONReader(c.%s)", style, ba.goname)
-		pn("if err != nil { return nil, err }")
-		pn(`reqHeaders.Set("Content-Type", "application/json")`)
+		pn(`c.urlParams_.Set("alt", alt)`)
+		pn(`c.urlParams_.Set("prettyPrint", "false")`)
 	}
-	pn(`c.urlParams_.Set("alt", alt)`)
 
 	pn("urls := googleapi.ResolveRelative(c.s.BasePath, %q)", meth.m.Path)
 	if meth.supportsMediaUpload() {
@@ -1820,12 +1958,16 @@ func (meth *Method) generateCode() {
 		pn(" body = new(bytes.Buffer)")
 		pn(` reqHeaders.Set("Content-Type", "application/json")`)
 		pn("}")
-		pn("body, cleanup := c.mediaInfo_.UploadRequest(reqHeaders, body)")
+		pn("body, getBody, cleanup := c.mediaInfo_.UploadRequest(reqHeaders, body)")
 		pn("defer cleanup()")
 	}
-	pn("urls += \"?\" + c.urlParams_.Encode()")
-	pn("req, _ := http.NewRequest(%q, urls, body)", httpMethod)
+	pn(`urls += "?" + c.urlParams_.Encode()`)
+	pn("req, err := http.NewRequest(%q, urls, body)", httpMethod)
+	pn("if err != nil { return nil, err }")
 	pn("req.Header = reqHeaders")
+	if meth.supportsMediaUpload() {
+		pn("req.GetBody = getBody")
+	}
 
 	// Replace param values after NewRequest to avoid reencoding them.
 	// E.g. Cloud Storage API requires '%2F' in entity param to be kept, but url.Parse replaces it with '/'.
@@ -1859,7 +2001,7 @@ func (meth *Method) generateCode() {
 
 	mapRetType := strings.HasPrefix(retTypeComma, "map[")
 	pn("\n// Do executes the %q call.", meth.m.ID)
-	if retTypeComma != "" && !mapRetType {
+	if retTypeComma != "" && !mapRetType && !meth.IsRawResponse() {
 		commentFmtStr := "Exactly one of %v or error will be non-nil. " +
 			"Any non-2xx status code is an error. " +
 			"Response headers are in either %v.ServerResponse.Header " +
@@ -1875,62 +2017,77 @@ func (meth *Method) generateCode() {
 		nilRet = "nil, "
 	}
 	pn(`gensupport.SetOptions(c.urlParams_, opts...)`)
-	pn(`res, err := c.doRequest("json")`)
-
-	if retTypeComma != "" && !mapRetType {
-		pn("if res != nil && res.StatusCode == http.StatusNotModified {")
-		pn(" if res.Body != nil { res.Body.Close() }")
-		pn(" return nil, &googleapi.Error{")
-		pn("  Code: res.StatusCode,")
-		pn("  Header: res.Header,")
-		pn(" }")
-		pn("}")
-	}
-	pn("if err != nil { return %serr }", nilRet)
-	pn("defer googleapi.CloseBody(res)")
-	pn("if err := googleapi.CheckResponse(res); err != nil { return %serr }", nilRet)
-	if meth.supportsMediaUpload() {
-		pn(`rx := c.mediaInfo_.ResumableUpload(res.Header.Get("Location"))`)
-		pn("if rx != nil {")
-		pn(" rx.Client = c.s.client")
-		pn(" rx.UserAgent = c.s.userAgent()")
-		pn(" ctx := c.ctx_")
-		pn(" if ctx == nil {")
-		// TODO(mcgreevy): Require context when calling Media, or Do.
-		pn("  ctx = context.TODO()")
-		pn(" }")
-		pn(" res, err = rx.Upload(ctx)")
-		pn(" if err != nil { return %serr }", nilRet)
-		pn(" defer res.Body.Close()")
-		pn(" if err := googleapi.CheckResponse(res); err != nil { return %serr }", nilRet)
-		pn("}")
-	}
-	if retTypeComma == "" {
-		pn("return nil")
+	if meth.IsRawResponse() {
+		pn(`return c.doRequest("")`)
 	} else {
-		if mapRetType {
-			pn("var ret %s", responseType(a, meth.m))
-		} else {
-			pn("ret := &%s{", responseTypeLiteral(a, meth.m))
-			pn(" ServerResponse: googleapi.ServerResponse{")
+		pn(`res, err := c.doRequest("json")`)
+
+		if retTypeComma != "" && !mapRetType {
+			pn("if res != nil && res.StatusCode == http.StatusNotModified {")
+			pn(" if res.Body != nil { res.Body.Close() }")
+			pn(" return nil, &googleapi.Error{")
+			pn("  Code: res.StatusCode,")
 			pn("  Header: res.Header,")
-			pn("  HTTPStatusCode: res.StatusCode,")
-			pn(" },")
+			pn(" }")
 			pn("}")
 		}
-		if a.needsDataWrapper() {
-			pn("target := &struct {")
-			pn("  Data %s `json:\"data\"`", responseType(a, meth.m))
-			pn("}{ret}")
-		} else {
-			pn("target := &ret")
+		pn("if err != nil { return %serr }", nilRet)
+		pn("defer googleapi.CloseBody(res)")
+		pn("if err := googleapi.CheckResponse(res); err != nil { return %serr }", nilRet)
+		if meth.supportsMediaUpload() {
+			pn(`rx := c.mediaInfo_.ResumableUpload(res.Header.Get("Location"))`)
+			pn("if rx != nil {")
+			pn(" rx.Client = c.s.client")
+			pn(" rx.UserAgent = c.s.userAgent()")
+			pn(" ctx := c.ctx_")
+			pn(" if ctx == nil {")
+			// TODO(mcgreevy): Require context when calling Media, or Do.
+			pn("  ctx = context.TODO()")
+			pn(" }")
+			pn(" res, err = rx.Upload(ctx)")
+			pn(" if err != nil { return %serr }", nilRet)
+			pn(" defer res.Body.Close()")
+			pn(" if err := googleapi.CheckResponse(res); err != nil { return %serr }", nilRet)
+			pn("}")
 		}
+		if retTypeComma == "" {
+			pn("return nil")
+		} else {
+			if mapRetType {
+				pn("var ret %s", responseType(a, meth.m))
+			} else {
+				pn("ret := &%s{", responseTypeLiteral(a, meth.m))
+				pn(" ServerResponse: googleapi.ServerResponse{")
+				pn("  Header: res.Header,")
+				pn("  HTTPStatusCode: res.StatusCode,")
+				pn(" },")
+				pn("}")
+			}
+			if a.needsDataWrapper() {
+				pn("target := &struct {")
+				pn("  Data %s `json:\"data\"`", responseType(a, meth.m))
+				pn("}{ret}")
+			} else {
+				pn("target := &ret")
+			}
 
-		pn("if err := json.NewDecoder(res.Body).Decode(target); err != nil { return nil, err }")
-		pn("return ret, nil")
+			if meth.m.ID == "ml.projects.predict" {
+				pn("var b bytes.Buffer")
+				pn("if _, err := io.Copy(&b, res.Body); err != nil { return nil, err }")
+				pn("if err := res.Body.Close(); err != nil { return nil, err }")
+				pn("if err := json.NewDecoder(bytes.NewReader(b.Bytes())).Decode(target); err != nil { return nil, err }")
+				pn("ret.Data = b.String()")
+			} else {
+				pn("if err := gensupport.DecodeResponse(target, res); err != nil { return nil, err }")
+			}
+			pn("return ret, nil")
+		}
 	}
 
-	bs, _ := json.MarshalIndent(meth.m.JSONMap, "\t// ", "  ")
+	bs, err := json.MarshalIndent(meth.m.JSONMap, "\t// ", "  ")
+	if err != nil {
+		panic(err)
+	}
 	pn("// %s\n", string(bs))
 	pn("}")
 
@@ -2035,22 +2192,60 @@ func resolveRelative(basestr, relstr string) string {
 	return u.String()
 }
 
-func (meth *Method) NewArguments() (args *arguments) {
-	args = &arguments{
+func (meth *Method) IsRawRequest() bool {
+	if meth.m.Request == nil {
+		return false
+	}
+	// TODO(cbro): enable across other APIs.
+	if meth.api.Name != "healthcare" {
+		return false
+	}
+	return meth.m.Request.Ref == "HttpBody"
+}
+
+func (meth *Method) IsRawResponse() bool {
+	if meth.m.Response == nil {
+		return false
+	}
+	if meth.IsRawRequest() {
+		// always match raw requests with raw responses.
+		return true
+	}
+	// TODO(cbro): enable across other APIs.
+	if meth.api.Name != "healthcare" {
+		return false
+	}
+	return meth.m.Response.Ref == "HttpBody"
+}
+
+func (meth *Method) NewArguments() *arguments {
+	args := &arguments{
 		method: meth,
 		m:      make(map[string]*argument),
 	}
-	po := meth.m.ParameterOrder
-	if len(po) > 0 {
-		for _, pname := range po {
-			arg := meth.NewArg(pname, meth.NamedParam(pname))
-			args.AddArg(arg)
+	pnames := meth.m.ParameterOrder
+	if len(pnames) == 0 {
+		// No parameterOrder; collect required parameters and sort by name.
+		for _, reqParam := range meth.grepParams(func(p *Param) bool { return p.p.Required }) {
+			pnames = append(pnames, reqParam.p.Name)
 		}
+		sort.Strings(pnames)
+	}
+	for _, pname := range pnames {
+		arg := meth.NewArg(pname, meth.NamedParam(pname))
+		args.AddArg(arg)
 	}
 	if rs := meth.m.Request; rs != nil {
-		args.AddArg(meth.NewBodyArg(rs))
+		if meth.IsRawRequest() {
+			args.AddArg(&argument{
+				goname: "body_",
+				gotype: "io.Reader",
+			})
+		} else {
+			args.AddArg(meth.NewBodyArg(rs))
+		}
 	}
-	return
+	return args
 }
 
 func (meth *Method) NewBodyArg(ds *disco.Schema) *argument {
@@ -2109,6 +2304,8 @@ func (a *argument) exprAsString(prefix string) string {
 		return "strconv.FormatInt(" + prefix + a.goname + ", 10)"
 	case "uint64":
 		return "strconv.FormatUint(" + prefix + a.goname + ", 10)"
+	case "bool":
+		return "strconv.FormatBool(" + prefix + a.goname + ")"
 	}
 	log.Panicf("unknown type: apitype=%q, gotype=%q", a.apitype, a.gotype)
 	return ""
