@@ -135,10 +135,15 @@ func (r *run) Run() (err error) {
 		// Retrieve a list of iam users from the groups configured
 		iamers = r.getIamers()
 		for uid := range iamers {
+			mustRemove := true
 			for _, ldapuid := range ldapers {
-				if ldapuid != uid {
-					continue
+				if ldapuid == uid {
+					r.debug("aws %q: keeping user %q", r.p.AccountName, uid)
+					mustRemove = false
+					break
 				}
+			}
+			if mustRemove {
 				r.debug("aws %q: %q found in IAM group but not in LDAP, needs deletion",
 					r.p.AccountName, uid)
 				r.removeIamUser(uid)
