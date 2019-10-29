@@ -1,172 +1,263 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/.
-//
-// Contributor: Julien Vehent <ulfr@mozilla.com>
-
-package main // import "go.mozilla.org/userplex"
-
-//go:generate ./version.sh
+package main
 
 import (
-	"crypto/tls"
-	"crypto/x509"
-	"flag"
 	"fmt"
-	"log"
 	"os"
-	"time"
+	"strings"
 
-	// modules
+	"go.mozilla.org/person-api"
 	"go.mozilla.org/userplex/modules"
-	_ "go.mozilla.org/userplex/modules/authorizedkeys"
-	_ "go.mozilla.org/userplex/modules/aws"
+	"go.mozilla.org/userplex/modules/authorizedkeys"
+	"go.mozilla.org/userplex/modules/aws"
 
-	//_ "go.mozilla.org/userplex/modules/datadog"
-	//_ "go.mozilla.org/userplex/modules/github"
-	//_ "go.mozilla.org/userplex/modules/pagerduty"
-
-	"github.com/gorhill/cronexpr"
-	"go.mozilla.org/mozldap"
+	log "github.com/sirupsen/logrus"
+	"github.com/urfave/cli"
 )
 
-var config = flag.String("c", "", "Load configuration from file. Use stdin if omitted.")
-var applyChanges = flag.Bool("applyChanges", false, "By default, Userplex runs in dry mode. Set this flag to apply changes.")
-var notifyUsers = flag.Bool("notifyUsers", false, "If set, Userplex will send email notifications to users when changes are applied.")
-var once = flag.Bool("once", false, "Run only once and exit, don't enter the cron loop")
-var runmod = flag.String("module", "all", "Module to run. if 'all', run all available modules (default)")
-var showVersion = flag.Bool("V", false, "Show version and exit")
-var debug = flag.Bool("D", false, "Enable debug logging")
-var resetUsers = flag.String("reset", "", "Reset an LDAP user's userplexed accounts")
-
 func main() {
-	var err error
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "%s - Manage users in various SaaS based on a LDAP source\n"+
-			"Usage: %s -c config.yaml\n",
-			os.Args[0], os.Args[0])
-		flag.PrintDefaults()
+	app := cli.NewApp()
+	app.Name = "userplex"
+	app.Usage = "userplex - Manage users in various systems based on a LDAP source"
+	app.Version = "v2.0.0"
+	app.Authors = []cli.Author{
+		{Name: "AJ Bahnken", Email: "ajvb@mozilla.com"},
+		{Name: "Julien Vehent", Email: "jvehent@mozilla.com"},
 	}
-	flag.Parse()
+	app.EnableBashCompletion = true
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:   "config, c",
+			Usage:  "Path to userplex config file",
+			EnvVar: "USERPLEX_CONFIG_PATH",
+		},
+	}
+	app.Commands = []cli.Command{
+		{
+			Name:  "aws",
+			Usage: "Operations within AWS",
+			Action: func(c *cli.Context) error {
+				log.Error("You must specify a subcommand")
+				return nil
+			},
+			Subcommands: createModuleSubcommands(&aws.AWSModule{}),
+		},
+		{
+			Name:  "authorizedkeys",
+			Usage: "Operations within authorizedkeys files",
+			Action: func(c *cli.Context) error {
+				log.Error("You must specify a subcommand")
+				return nil
+			},
+			Subcommands: createModuleSubcommands(&authorizedkeys.AuthorizedKeysModule{}),
+		},
+		{
+			Name:      "get-person",
+			Usage:     "Get Person from Person API. Useful for finding correct identifier",
+			ArgsUsage: "[user-identifier]",
+			Action: func(c *cli.Context) error {
+				cfg, err := loadConf(c.GlobalString("c"))
+				if err != nil {
+					log.Fatalf("Couldn't load config: %s", err)
+				}
 
-	if *showVersion {
-		fmt.Println(version)
-		os.Exit(0)
+				personClient, err := person_api.NewClient(
+					cfg.Person.PersonClientId,
+					cfg.Person.PersonClientSecret,
+					cfg.Person.PersonBaseURL,
+					cfg.Person.PersonAuth0URL,
+				)
+				if err != nil {
+					log.Fatalf("Could not create person api client: %s", err)
+				}
+				username := c.Args()[0]
+
+				p, err := getPerson(personClient, username)
+				if err != nil {
+					log.Fatalf("Could not find user %s", username)
+				}
+
+				if p.PrimaryEmail.Value == "" {
+					log.Fatalf("Could not find user %s", username)
+				}
+
+				log.Infof("%s: %+v", p.GetLDAPUsername(), p)
+				return nil
+			},
+		},
 	}
 
-	// load the local configuration file
-	conf, err := loadConf(*config)
-	if err != nil {
-		log.Fatalf("failed to load configuration: %v", err)
-	}
-
-	// just run once
-	if *once || conf.Cron == "disabled" {
-		run(conf)
-		return
-	}
-
-	// infinite loop, wake up at the cron period
-	for {
-		cexpr, err := cronexpr.Parse(conf.Cron)
-		if err != nil {
-			log.Fatalf("failed to parse cron string %q: %v", conf.Cron, err)
-		}
-		// sleep until the next run is scheduled to happen
-		nrun := cexpr.Next(time.Now())
-		waitduration := nrun.Sub(time.Now())
-		log.Printf("[info] next run will start at %v (in %v)", nrun, waitduration)
-		time.Sleep(waitduration)
-
-		run(conf)
-	}
-}
-
-func run(conf conf) {
-	var (
-		cli mozldap.Client
-		err error
-	)
-	// instanciate an ldap client
-	tlsconf := &tls.Config{
-		MinVersion:         tls.VersionTLS12,
-		InsecureSkipVerify: conf.Ldap.Insecure,
-		ServerName:         cli.Host,
-	}
-	if len(conf.Ldap.TLSCert) > 0 && len(conf.Ldap.TLSKey) > 0 {
-		cert, err := tls.X509KeyPair([]byte(conf.Ldap.TLSCert), []byte(conf.Ldap.TLSKey))
-		if err != nil {
-			log.Fatal(err)
-		}
-		tlsconf.Certificates = []tls.Certificate{cert}
-	}
-	if len(conf.Ldap.CACert) > 0 {
-		ca := x509.NewCertPool()
-		if ok := ca.AppendCertsFromPEM([]byte(conf.Ldap.CACert)); !ok {
-			log.Fatal("failed to import CA Certificate")
-		}
-		tlsconf.RootCAs = ca
-	}
-	cli, err = mozldap.NewClient(
-		conf.Ldap.URI,
-		conf.Ldap.Username,
-		conf.Ldap.Password,
-		tlsconf,
-		conf.Ldap.Starttls,
-	)
+	err := app.Run(os.Args)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer cli.Close()
-	log.Printf("connected %s on %s:%d, tls:%v starttls:%v\n", cli.BaseDN, cli.Host, cli.Port, cli.UseTLS, cli.UseStartTLS)
-	conf.Ldap.cli = cli
+}
 
-	// Channel where modules publish their notifications
-	// which are aggregated and sent by the main program
-	notifchan := make(chan modules.Notification)
-	notifdone := make(chan bool)
-	go processNotifications(conf, notifchan, notifdone)
+func createModuleSubcommands(module modules.Module) []cli.Command {
+	return []cli.Command{
+		{
+			Name:      "create",
+			Usage:     "Create user",
+			ArgsUsage: "[username]",
+			Action: func(c *cli.Context) error {
+				person, conf, moduleConfs, personClient := loadAndVerifyContext(c, module)
+				for _, mconf := range moduleConfs {
+					m := module.NewFromInterface(mconf, conf.Notifications, personClient)
+					err := m.Create(person.GetLDAPUsername(), person)
+					if err != nil {
+						log.Errorf("Error from module.Create: %s", err)
+						return err
+					}
+				}
+				return nil
+			},
+		},
+		{
+			Name:      "reset",
+			Usage:     "Reset user credentials",
+			ArgsUsage: "[username]",
+			Action: func(c *cli.Context) error {
+				person, conf, moduleConfs, personClient := loadAndVerifyContext(c, module)
+				for _, mconf := range moduleConfs {
+					m := module.NewFromInterface(mconf, conf.Notifications, personClient)
+					err := m.Reset(person.GetLDAPUsername(), person)
+					if err != nil {
+						log.Errorf("Error from module.Reset: %s", err)
+						return err
+					}
+				}
+				return nil
+			},
+		},
+		{
+			Name:      "delete",
+			Usage:     "Delete user",
+			ArgsUsage: "[username]",
+			Action: func(c *cli.Context) error {
+				person, conf, moduleConfs, personClient := loadAndVerifyContext(c, module)
+				for _, mconf := range moduleConfs {
+					m := module.NewFromInterface(mconf, conf.Notifications, personClient)
+					err := m.Delete(person.GetLDAPUsername())
+					if err != nil {
+						log.Errorf("Error from module.Delete: %s", err)
+						return err
+					}
+				}
+				return nil
+			},
+		},
+		{
+			Name:  "sync",
+			Usage: "Run sync operation",
+			Action: func(c *cli.Context) error {
+				conf, moduleConfs, personClient := loadConfigForSubcommand(c, module)
+				for _, mconf := range moduleConfs {
+					m := module.NewFromInterface(mconf, conf.Notifications, personClient)
+					err := m.Sync()
+					if err != nil {
+						log.Errorf("Error from module.Sync: %s", err)
+						return err
+					}
+				}
+				return nil
+			},
+		},
+		{
+			Name:  "verify",
+			Usage: "Verify users against Person API. Only outputs report, use `sync` to take against discrepancies.",
+			Action: func(c *cli.Context) error {
+				conf, moduleConfs, personClient := loadConfigForSubcommand(c, module)
+				for _, mconf := range moduleConfs {
+					m := module.NewFromInterface(mconf, conf.Notifications, personClient)
+					err := m.Verify()
+					if err != nil {
+						log.Errorf("Error from module.Verify: %s", err)
+						return err
+					}
+				}
+				return nil
+			},
+		},
+	}
+}
 
-	// store configuration parameters for each module, including
-	// the values of notifyUsers, applyChanges, debug, the ldap
-	// client and the notification channel
-	for i := range conf.Modules {
-		conf.Modules[i].ApplyChanges = *applyChanges
-		conf.Modules[i].NotifyUsers = *notifyUsers
-		conf.Modules[i].LdapCli = cli
-		conf.Modules[i].Notify.Channel = notifchan
-		conf.Modules[i].Debug = *debug
-		conf.Modules[i].ResetUsers = *resetUsers
+func loadConfigForSubcommand(c *cli.Context, module modules.Module) (conf, []modules.Configuration, *person_api.Client) {
+	cfg, err := loadConf(c.GlobalString("c"))
+	if err != nil {
+		log.Fatalf("Couldn't load config: %s", err)
 	}
 
-	moduleHasRun := make(map[string]bool)
+	personClient, err := person_api.NewClient(
+		cfg.Person.PersonClientId,
+		cfg.Person.PersonClientSecret,
+		cfg.Person.PersonBaseURL,
+		cfg.Person.PersonAuth0URL,
+	)
+	if err != nil {
+		log.Fatalf("Could not create person api client: %s", err)
+	}
 
-	// run each module in the order it appears in the configuration
-	for _, modconf := range conf.Modules {
-		if *runmod != "all" && *runmod != modconf.Name {
-			continue
+	var moduleConfigs []modules.Configuration
+	switch module {
+	case module.(*aws.AWSModule):
+		moduleConfigs = make([]modules.Configuration, len(cfg.Aws))
+		for i, c := range cfg.Aws {
+			moduleConfigs[i] = c
 		}
-		if _, ok := modules.Available[modconf.Name]; !ok {
-			log.Printf("[warning] %s module not registered, skipping it", modconf.Name)
-			continue
+	case module.(*authorizedkeys.AuthorizedKeysModule):
+		moduleConfigs = make([]modules.Configuration, len(cfg.AuthorizedKeys))
+		for i, c := range cfg.AuthorizedKeys {
+			moduleConfigs[i] = c
 		}
-		// one-off reset uses the first module config, skips subsequent
-		if *resetUsers != "" {
-			if _, ok := moduleHasRun[modconf.Name]; ok {
-				log.Printf("[warning] SKIPPING duplicate module config %s! Reset uses only the FIRST configuration for a given module.", modconf.Name)
-				continue
+	}
+
+	return cfg, moduleConfigs, personClient
+}
+
+func loadAndVerifyContext(c *cli.Context, module modules.Module) (*person_api.Person, conf, []modules.Configuration, *person_api.Client) {
+	cfg, moduleConfigs, personClient := loadConfigForSubcommand(c, module)
+	username := c.Args()[0]
+
+	p, err := getPerson(personClient, username)
+	if err != nil {
+		log.Fatalf("Could not find user %s", username)
+	}
+
+	if len(p.GetSSHPublicKeys()) == 0 {
+		log.Fatalf("User %s has no SSH public keys. A SSH public key must be added before userplex can be ran.", username)
+	}
+	if len(p.GetPGPPublicKeys()) == 0 {
+		log.Fatalf("User %s has no PGP public keys. A PGP public key must be added before userplex can be ran.", username)
+	}
+
+	if len(moduleConfigs) == 0 {
+		log.Fatalf("No module configurations found for %s", module)
+	}
+
+	return p, cfg, moduleConfigs, personClient
+}
+
+func getPerson(personClient *person_api.Client, username string) (*person_api.Person, error) {
+	var (
+		p   *person_api.Person
+		err error
+	)
+
+	if strings.Contains(username, "@mozilla.com") {
+		p, err = personClient.GetPersonByEmail(username)
+		if err != nil {
+			return nil, fmt.Errorf("Could not find user %s: %s", username, err)
+		}
+	} else {
+		p, err = personClient.GetPersonByUsername(username)
+		if err != nil || p.PrimaryEmail.Value == "" {
+			p, err = personClient.GetPersonByUserId(username)
+			if err != nil {
+				return nil, fmt.Errorf("Could not find user %s: %s", username, err)
 			}
 		}
-		log.Println("[info] invoking module", modconf.Name)
-		run := modules.Available[modconf.Name].NewRun(modconf)
-		err = run.Run()
-		if err != nil {
-			log.Printf("[error] %s module failed with error: %v", modconf.Name, err)
-		}
-		moduleHasRun[modconf.Name] = true
 	}
-	// Modules are done, close the notification channel to tell the goroutine
-	// that it can aggregate and send them, and wait for notifdone to come back
-	close(notifchan)
-	<-notifdone
+	if p.PrimaryEmail.Value == "" {
+		return nil, fmt.Errorf("Could not find user %s", username)
+	}
+	return p, err
 }

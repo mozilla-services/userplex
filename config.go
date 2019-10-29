@@ -3,39 +3,31 @@ package main
 import (
 	"io/ioutil"
 
-	"github.com/pkg/errors"
-	yaml "gopkg.in/yaml.v2"
+	"go.mozilla.org/userplex/modules"
+	"go.mozilla.org/userplex/notifications"
 
-	"go.mozilla.org/mozldap"
 	"go.mozilla.org/sops"
 	"go.mozilla.org/sops/decrypt"
-	"go.mozilla.org/userplex/modules"
+
+	"github.com/pkg/errors"
+	yaml "gopkg.in/yaml.v2"
 )
 
 type conf struct {
-	Cron string
-	Ldap struct {
-		URI, Username, Password string
-		TLSCert, TLSKey, CACert string
-		Insecure, Starttls      bool
-		cli                     mozldap.Client
-	}
-	Notifications struct {
-		Email struct {
-			Host, From, Cc,
-			ReplyTo, Subject string
-			Port int
-			Auth struct {
-				User, Pass string
-			}
-		}
-	}
-	UIDMap []struct {
-		LdapUID  string
-		LocalUID string
-	}
+	Person struct {
+		PersonClientId     string `yaml:"person_client_id"`
+		PersonClientSecret string `yaml:"person_client_secret"`
+		PersonBaseURL      string `yaml:"person_base_url"`
+		PersonAuth0URL     string `yaml:"person_auth0_url"`
+	} `yaml:"person"`
 
-	Modules []modules.Configuration
+	Notifications notifications.Config `yaml:"notifications"`
+
+	UsernameMap []modules.Umap `yaml:"username_map" json:"username_map"`
+
+	Aws []modules.AWSConfiguration `yaml:"aws"`
+
+	AuthorizedKeys []modules.AuthorizedKeysConfiguration `yaml:"authorized_keys"`
 }
 
 func loadConf(path string) (cfg conf, err error) {

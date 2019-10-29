@@ -4,15 +4,12 @@
 
 PROJECT		:= go.mozilla.org/userplex
 
-all: test vet generate userplex
+all: test vet install
 
 dev: lint cyclo all
 
-userplex:
+install:
 	go install $(PROJECT)
-
-vendor:
-	govend -u
 
 test:
 	go test $(PROJECT)/modules/aws
@@ -25,10 +22,7 @@ lint:
 vet:
 	go vet $(PROJECT)
 
-generate:
-	go generate
-
 cyclo:
 	gocyclo -over 15 *.go modules/
 
-.PHONY: all test clean userplex vendor
+.PHONY: all test clean install vendor
