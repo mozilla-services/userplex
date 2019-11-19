@@ -14,10 +14,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/awsutil"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	awscred "github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go/service/sts"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -42,17 +44,38 @@ func New(c modules.AWSConfiguration, notificationsConfig notifications.Config, P
 	}
 
 	awsconf := aws.NewConfig().WithRegion("us-east-1")
+	sess := session.New()
 	if c.Credentials.AccessKey != "" && c.Credentials.SecretKey != "" {
 		creds := awscred.NewStaticCredentials(c.Credentials.AccessKey, c.Credentials.SecretKey, "")
 		awsconf = awsconf.WithCredentials(creds)
+	} else if c.Credentials.RoleARN != "" {
+		sess, err = awsm.createStsSession(awsconf, sess)
+		if err != nil {
+			log.Fatalf("Failed to assume AWS role %s: %s", c.Credentials.RoleARN, err)
+		}
 	} else {
 		log.Info("Credentials not found in userplex config, using default local aws authentication flow.")
 	}
 
-	awsm.ec2 = ec2.New(session.New(), awsconf)
-	awsm.iam = iam.New(session.New(), awsconf)
+	awsm.ec2 = ec2.New(sess, awsconf)
+	awsm.iam = iam.New(sess, awsconf)
 
 	return awsm
+}
+
+func (awsm *AWSModule) createStsSession(config *aws.Config, sess *session.Session) (*session.Session, error) {
+	stsService := sts.New(sess)
+	name := "userplex"
+	out, err := stsService.AssumeRole(&sts.AssumeRoleInput{RoleArn: &awsm.config.Credentials.RoleARN, RoleSessionName: &name})
+	if err != nil {
+		return nil, fmt.Errorf("Failed to assume role %q: %v", awsm.config.Credentials.RoleARN, err)
+	}
+	config.Credentials = credentials.NewStaticCredentials(*out.Credentials.AccessKeyId, *out.Credentials.SecretAccessKey, *out.Credentials.SessionToken)
+	sess, err = session.NewSession(config)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create new aws session: %v", err)
+	}
+	return sess, nil
 }
 
 func (awsm *AWSModule) Create(username string, person *person_api.Person) error {
