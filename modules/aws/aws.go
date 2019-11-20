@@ -554,8 +554,7 @@ func (awsm *AWSModule) verifyAWSUsers() ([]VerifyResult, error) {
 		return nil, err
 	}
 
-	// TODO: Filter to just employees
-	allLdapUsers, err := awsm.PersonClient.GetAllUsers()
+	allLdapUsers, err := awsm.PersonClient.GetAllActiveStaff()
 	if err != nil {
 		log.Errorf("Error getting users from Person API: %s", err)
 		return nil, err

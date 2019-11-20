@@ -149,8 +149,7 @@ func (akm *AuthorizedKeysModule) verifyPaths() ([]string, error) {
 		fileMap[f] = true
 	}
 
-	// TODO: Filter to just employees
-	allLdapUsers, err := akm.PersonClient.GetAllUsers()
+	allLdapUsers, err := akm.PersonClient.GetAllActiveStaff()
 	if err != nil {
 		log.Errorf("Error getting users from Person API: %s", err)
 		return nil, err
