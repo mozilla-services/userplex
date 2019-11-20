@@ -277,6 +277,8 @@ go.mozilla.org/mozldap v0.0.0-20160924171832-b72e7f45c7f9 h1:NAqp1QMOd/uGC1+Xfjp
 go.mozilla.org/mozldap v0.0.0-20160924171832-b72e7f45c7f9/go.mod h1:NgU8IAlCZQrJsiUAkqwqycKx6MW1IMU0iXQ8FY8fKrg=
 go.mozilla.org/person-api v0.0.0-20191118190218-e4c5770d1104 h1:VV/SM793UltDg3HwR6MIbgDfUiHGLsRlXqWYrKahyjc=
 go.mozilla.org/person-api v0.0.0-20191118190218-e4c5770d1104/go.mod h1:w6D2G0XDLxCfr8DmfCkbYwwhhcVRdFJ2Gpwxe/rJt8c=
+go.mozilla.org/person-api v0.0.0-20191120210847-5e8f6374ee7e h1:8BhgZxXe2v7TZaGmjtrVu4GzrPcmwTR1GIW+W7gvHaI=
+go.mozilla.org/person-api v0.0.0-20191120210847-5e8f6374ee7e/go.mod h1:w6D2G0XDLxCfr8DmfCkbYwwhhcVRdFJ2Gpwxe/rJt8c=
 go.mozilla.org/sops v0.0.0-20190611200209-e9e1e87723c8/go.mod h1:njv+SYMHy9urU/V330aYWmWAP6EwAfN0WaRafSBgwfs=
 go.mozilla.org/sops v0.0.0-20190912205235-14a22d7a7060 h1:KnOZgR0z89tCwGympfPkpzXdlCmhksUP5ddQ+Iqo1FU=
 go.mozilla.org/sops v0.0.0-20190912205235-14a22d7a7060/go.mod h1:StzH0aTTiss59GzhB1wiC9H5dqUqTTDZYfeurUrmJD8=

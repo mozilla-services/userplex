@@ -12,7 +12,7 @@ require (
 	github.com/urfave/cli v1.22.1
 	github.com/zorkian/go-datadog-api v2.24.0+incompatible // indirect
 	go.mozilla.org/mozldap v0.0.0-20160924171832-b72e7f45c7f9
-	go.mozilla.org/person-api v0.0.0-20191118190218-e4c5770d1104
+	go.mozilla.org/person-api v0.0.0-20191120210847-5e8f6374ee7e
 	go.mozilla.org/sops v0.0.0-20190912205235-14a22d7a7060
 	go.mozilla.org/userplex/modules v0.0.0
 	go.mozilla.org/userplex/modules/authorizedkeys v0.0.0
