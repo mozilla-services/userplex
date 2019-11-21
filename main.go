@@ -14,11 +14,13 @@ import (
 	"github.com/urfave/cli"
 )
 
+const Version = "v1.0.0"
+
 func main() {
 	app := cli.NewApp()
 	app.Name = "userplex"
 	app.Usage = "userplex - Manage users in various systems based on a LDAP source"
-	app.Version = "v2.0.0"
+	app.Version = Version
 	app.Authors = []cli.Author{
 		{Name: "AJ Bahnken", Email: "ajvb@mozilla.com"},
 		{Name: "Julien Vehent", Email: "jvehent@mozilla.com"},

@@ -2,5 +2,31 @@ language: go
 go:
   - 1.13
 go_import_path: go.mozilla.org/userplex
+
 script:
     - make
+
+before_deploy:
+  - mkdir dist
+  - make deb-pkg rpm-pkg
+  - mv *.deb *.rpm dist/
+  - GOOS=darwin GO111MODULE=on go build -mod vendor -o dist/userplex-${TRAVIS_TAG}.darwin go.mozilla.org/userplex
+  - GOOS=windows GO111MODULE=on go build -mod vendor -o dist/userplex-${TRAVIS_TAG}.exe go.mozilla.org/userplex
+  - GOOS=linux GO111MODULE=on go build -mod vendor -o dist/userplex-${TRAVIS_TAG}.linux go.mozilla.org/userplex
+  - |
+      if [ ! -z "$TRAVIS_TAG" ]; then
+        version="$(grep '^const Version' main.go |cut -d '"' -f 2)"
+        if [ "$version" != "$TRAVIS_TAG" ]; then
+            echo "Git tag $TRAVIS_TAG does not match version $version, update the source!"
+            exit 1
+        fi
+      fi
+
+deploy:
+  provider: releases
+  api_key: "${GITHUB_OAUTH_TOKEN}"
+  file_glob: true
+  file: dist/*
+  skip_cleanup: true
+  on:
+    tags: true
