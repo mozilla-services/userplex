@@ -6,8 +6,8 @@ import (
 	"go.mozilla.org/userplex/modules"
 	"go.mozilla.org/userplex/notifications"
 
-	"go.mozilla.org/sops"
-	"go.mozilla.org/sops/decrypt"
+	"go.mozilla.org/sops/v3"
+	"go.mozilla.org/sops/v3/decrypt"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
