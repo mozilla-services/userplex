@@ -13,6 +13,8 @@ go.mozilla.org/person-api v0.0.0-20191118190218-e4c5770d1104 h1:VV/SM793UltDg3Hw
 go.mozilla.org/person-api v0.0.0-20191118190218-e4c5770d1104/go.mod h1:w6D2G0XDLxCfr8DmfCkbYwwhhcVRdFJ2Gpwxe/rJt8c=
 go.mozilla.org/person-api v0.0.0-20191120210847-5e8f6374ee7e h1:8BhgZxXe2v7TZaGmjtrVu4GzrPcmwTR1GIW+W7gvHaI=
 go.mozilla.org/person-api v0.0.0-20191120210847-5e8f6374ee7e/go.mod h1:w6D2G0XDLxCfr8DmfCkbYwwhhcVRdFJ2Gpwxe/rJt8c=
+go.mozilla.org/person-api v0.0.0-20191125182003-e07ecb512bfe h1:SY8AtlmPXNc/tUapjxMqAHxRoMlTp7pLZvwzpdFOv3c=
+go.mozilla.org/person-api v0.0.0-20191125182003-e07ecb512bfe/go.mod h1:w6D2G0XDLxCfr8DmfCkbYwwhhcVRdFJ2Gpwxe/rJt8c=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20191108234033-bd318be0434a h1:R/qVym5WAxsZWQqZCwDY/8sdVKV1m1WgU4/S5IRQAzc=
 golang.org/x/crypto v0.0.0-20191108234033-bd318be0434a/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=

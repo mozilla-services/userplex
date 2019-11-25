@@ -209,6 +209,8 @@ go.mozilla.org/gopgagent v0.0.0-20170926210634-4d7ea76ff71a h1:N7VD+PwpJME2ZfQT8
 go.mozilla.org/gopgagent v0.0.0-20170926210634-4d7ea76ff71a/go.mod h1:YDKUvO0b//78PaaEro6CAPH6NqohCmL2Cwju5XI2HoE=
 go.mozilla.org/person-api v0.0.0-20191120210847-5e8f6374ee7e h1:8BhgZxXe2v7TZaGmjtrVu4GzrPcmwTR1GIW+W7gvHaI=
 go.mozilla.org/person-api v0.0.0-20191120210847-5e8f6374ee7e/go.mod h1:w6D2G0XDLxCfr8DmfCkbYwwhhcVRdFJ2Gpwxe/rJt8c=
+go.mozilla.org/person-api v0.0.0-20191125182003-e07ecb512bfe h1:SY8AtlmPXNc/tUapjxMqAHxRoMlTp7pLZvwzpdFOv3c=
+go.mozilla.org/person-api v0.0.0-20191125182003-e07ecb512bfe/go.mod h1:w6D2G0XDLxCfr8DmfCkbYwwhhcVRdFJ2Gpwxe/rJt8c=
 go.mozilla.org/sops/v3 v3.5.0 h1:GpO9JRZhk6Kc+FVw5Q0vmnvDM6k956ZRh5tbG98T4XI=
 go.mozilla.org/sops/v3 v3.5.0/go.mod h1:9TY5PbZJtPWVHOUOvIetW31DLl2T7yNnoxmEGw/QNG0=
 go.opencensus.io v0.20.1/go.mod h1:6WKK9ahsWS3RSO+PY9ZHZUfv2irvY6gN279GOPZjmmk=
