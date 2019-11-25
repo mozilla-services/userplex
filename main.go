@@ -170,7 +170,7 @@ func createModuleSubcommands(module modules.Module) []cli.Command {
 		},
 		{
 			Name:  "verify",
-			Usage: "Verify users against Person API. Only outputs report, use `sync` to take against discrepancies.",
+			Usage: "Verify users against Person API. Outputs report, use `sync` to fix discrepancies.",
 			Action: func(c *cli.Context) error {
 				conf, moduleConfs, personClient := loadConfigForSubcommand(c, module)
 				for _, mconf := range moduleConfs {
