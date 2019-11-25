@@ -239,18 +239,71 @@ func (awsm *AWSModule) deleteIamUser(username string) error {
 		if err != nil || dako == nil {
 			log.Errorf("aws %q: failed to delete access key %q of user %q: %v. request was %q.",
 				awsm.config.AccountName, keyid, username, err, daki.String())
+			return err
 		} else {
 			log.Debugf("aws %q: deleted access key %q of user %q",
 				awsm.config.AccountName, keyid, username)
 		}
 
 	}
+
+	// Deactive mfa devices
+	mfaDevices, err := awsm.iam.ListMFADevices(&iam.ListMFADevicesInput{UserName: aws.String(username)})
+	if err != nil {
+		log.Errorf("aws %s: failed to list mfa devices for user %s. %s", awsm.config.AccountName, username, err)
+		return err
+	}
+	for _, device := range mfaDevices.MFADevices {
+		_, err := awsm.iam.DeactivateMFADevice(&iam.DeactivateMFADeviceInput{
+			UserName:     aws.String(username),
+			SerialNumber: device.SerialNumber,
+		})
+		if err != nil {
+			log.Errorf("aws %s: failed to delete mfa device %s for user %s. %s", awsm.config.AccountName, *device.SerialNumber, username, err)
+			return err
+		}
+	}
+
+	// Delete inline policies (DeleteUserPolicy)
+	inlinePolicies, err := awsm.iam.ListUserPolicies(&iam.ListUserPoliciesInput{UserName: aws.String(username)})
+	if err != nil {
+		log.Errorf("aws %s: failed to list inline policies for user %s: %s",
+			awsm.config.AccountName, username, err)
+		return err
+	}
+	for _, inlinePolicyName := range inlinePolicies.PolicyNames {
+		_, err := awsm.iam.DeleteUserPolicy(&iam.DeleteUserPolicyInput{
+			UserName:   aws.String(username),
+			PolicyName: inlinePolicyName,
+		})
+		if err != nil {
+			log.Errorf("aws %s: failed to delete inline policy %s for user %s. %s", awsm.config.AccountName, *inlinePolicyName, username, err)
+			return err
+		}
+	}
+
+	// Detach managed policies (DetachUserPolicy)
+	attachedPolicies, err := awsm.iam.ListAttachedUserPolicies(&iam.ListAttachedUserPoliciesInput{UserName: aws.String(username)})
+	if err != nil {
+		log.Errorf("aws %s: failed to list attached managed policies for user %s: %s",
+			awsm.config.AccountName, username, err)
+		return err
+	}
+	for _, attachedPolicy := range attachedPolicies.AttachedPolicies {
+		_, err := awsm.iam.DetachUserPolicy(&iam.DetachUserPolicyInput{
+			UserName:  aws.String(username),
+			PolicyArn: attachedPolicy.PolicyArn,
+		})
+		if err != nil {
+			log.Errorf("aws %s: failed to detach managed policy %s for user %s. %s", awsm.config.AccountName, *attachedPolicy.PolicyName, username, err)
+			return err
+		}
+	}
+
 	// remove the user from all IAM groups
-	lgfu, err = awsm.iam.ListGroupsForUser(&iam.ListGroupsForUserInput{
-		UserName: aws.String(username),
-	})
+	lgfu, err = awsm.iam.ListGroupsForUser(&iam.ListGroupsForUserInput{UserName: aws.String(username)})
 	if err != nil || lgfu == nil {
-		log.Errorf("aws %q: failed to list groups for user %q: %v",
+		log.Errorf("aws %s: failed to list groups for user %s: %s",
 			awsm.config.AccountName, username, err)
 		return err
 	}

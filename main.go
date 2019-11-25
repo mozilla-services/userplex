@@ -101,7 +101,7 @@ func createModuleSubcommands(module modules.Module) []cli.Command {
 			Usage:     "Create user",
 			ArgsUsage: "[username]",
 			Action: func(c *cli.Context) error {
-				person, conf, moduleConfs, personClient := loadAndVerifyContext(c, module)
+				person, conf, moduleConfs, personClient := loadAndVerifyContext(c, module, true)
 				for _, mconf := range moduleConfs {
 					m := module.NewFromInterface(mconf, conf.Notifications, personClient)
 					err := m.Create(person.GetLDAPUsername(), person)
@@ -118,7 +118,7 @@ func createModuleSubcommands(module modules.Module) []cli.Command {
 			Usage:     "Reset user credentials",
 			ArgsUsage: "[username]",
 			Action: func(c *cli.Context) error {
-				person, conf, moduleConfs, personClient := loadAndVerifyContext(c, module)
+				person, conf, moduleConfs, personClient := loadAndVerifyContext(c, module, true)
 				for _, mconf := range moduleConfs {
 					m := module.NewFromInterface(mconf, conf.Notifications, personClient)
 					err := m.Reset(person.GetLDAPUsername(), person)
@@ -135,10 +135,15 @@ func createModuleSubcommands(module modules.Module) []cli.Command {
 			Usage:     "Delete user",
 			ArgsUsage: "[username]",
 			Action: func(c *cli.Context) error {
-				person, conf, moduleConfs, personClient := loadAndVerifyContext(c, module)
+				person, conf, moduleConfs, personClient := loadAndVerifyContext(c, module, false)
 				for _, mconf := range moduleConfs {
 					m := module.NewFromInterface(mconf, conf.Notifications, personClient)
-					err := m.Delete(person.GetLDAPUsername())
+					var err error
+					if person != nil {
+						err = m.Delete(person.GetLDAPUsername())
+					} else {
+						err = m.Delete(c.Args()[0])
+					}
 					if err != nil {
 						log.Errorf("Error from module.Delete: %s", err)
 						return err
@@ -215,20 +220,26 @@ func loadConfigForSubcommand(c *cli.Context, module modules.Module) (conf, []mod
 	return cfg, moduleConfigs, personClient
 }
 
-func loadAndVerifyContext(c *cli.Context, module modules.Module) (*person_api.Person, conf, []modules.Configuration, *person_api.Client) {
+func loadAndVerifyContext(c *cli.Context, module modules.Module, exitOnError bool) (*person_api.Person, conf, []modules.Configuration, *person_api.Client) {
 	cfg, moduleConfigs, personClient := loadConfigForSubcommand(c, module)
 	username := c.Args()[0]
 
 	p, err := getPerson(personClient, username)
 	if err != nil {
-		log.Fatalf("Could not find user %s", username)
+		if exitOnError {
+			log.Fatalf("Could not find user %s", username)
+		}
 	}
 
-	if len(p.GetSSHPublicKeys()) == 0 {
-		log.Fatalf("User %s has no SSH public keys. A SSH public key must be added before userplex can be ran.", username)
+	if p != nil && len(p.GetSSHPublicKeys()) == 0 {
+		if exitOnError {
+			log.Fatalf("User %s has no SSH public keys. A SSH public key must be added before userplex can be ran.", username)
+		}
 	}
-	if len(p.GetPGPPublicKeys()) == 0 {
-		log.Fatalf("User %s has no PGP public keys. A PGP public key must be added before userplex can be ran.", username)
+	if p != nil && len(p.GetPGPPublicKeys()) == 0 {
+		if exitOnError {
+			log.Fatalf("User %s has no PGP public keys. A PGP public key must be added before userplex can be ran.", username)
+		}
 	}
 
 	if len(moduleConfigs) == 0 {
