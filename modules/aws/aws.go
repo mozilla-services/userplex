@@ -545,8 +545,8 @@ func (awsm *AWSModule) getAllAWSUsersWithConsoleAccess() ([]*iam.User, error) {
 func (awsm *AWSModule) verifyAWSUsers() ([]VerifyResult, error) {
 	var (
 		verifyResults []VerifyResult
-		ldapUsernames map[string]*person_api.Person
 	)
+	ldapUsernames := make(map[string]*person_api.Person)
 
 	iamUsers, err := awsm.getAllAWSUsersWithConsoleAccess()
 	if err != nil {
@@ -579,6 +579,7 @@ func (awsm *AWSModule) verifyAWSUsers() ([]VerifyResult, error) {
 					log.Errorf("Error getting list of groups for user %s: %s", *user.UserName, err)
 					return nil, err
 				}
+
 				for _, group := range groupsOutput.Groups {
 					found := false
 					// Check for extra goups that the user wasn't expected to have.
