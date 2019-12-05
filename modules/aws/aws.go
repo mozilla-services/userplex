@@ -3,7 +3,6 @@ package aws
 import (
 	"crypto/rand"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"go.mozilla.org/person-api"
@@ -150,7 +149,13 @@ aws_secret_access_key = %s`,
 	sshKeyText := fmt.Sprintf("\nCreated the following AWS SSH keys from your SSH keys in LDAP:")
 	createdKeys := false
 	for i, key := range sshkeys {
-		keyname := username + "-key-" + strconv.Itoa(i)
+		if len(key) == 0 {
+			continue
+		}
+		if strings.HasPrefix(key, "ssh-ed25519") {
+			continue
+		}
+		keyname := fmt.Sprintf("%s-key-%d", username, i)
 		ikpo, err := awsm.ec2.ImportKeyPair(&ec2.ImportKeyPairInput{
 			KeyName:           aws.String(keyname),
 			PublicKeyMaterial: []byte(key),
@@ -166,6 +171,7 @@ aws_secret_access_key = %s`,
 			return err
 		}
 		sshKeyText += fmt.Sprintf("\n%s, MD5 Fingerprint: %s", *ikpo.KeyName, *ikpo.KeyFingerprint)
+		createdKeys = true
 	}
 	if !createdKeys {
 		sshKeyText = ""
