@@ -182,7 +182,7 @@ aws_secret_access_key = %s`,
 	} else {
 		fmt.Println("Notify new users disabled, printing output.")
 		fmt.Printf("Created new user: %s\n", username)
-		fmt.Printf("Email body: \n%s", strings.Join([]string{body, accessKeyText, sshKeyText}, "\n"))
+		fmt.Printf("Email body: \n%s\n\n", strings.Join([]string{body, accessKeyText, sshKeyText}, "\n"))
 		eb, err := notifications.EncryptMailBody(awsm.Notifications, []byte(strings.Join([]string{body, accessKeyText, sshKeyText}, "\n")), person)
 		if err != nil {
 			log.Errorf("Error encrypted email body: %s", err)
