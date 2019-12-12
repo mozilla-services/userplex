@@ -1,5 +1,4 @@
 # Sample Userplex configuration file
-
 person:
   person_client_id: "client_id"
   person_client_secret: "client_secret"
@@ -27,7 +26,6 @@ mycustomawsuidmap1: &CUSTOMMAP1
   - ldap_username: tanderson
     local_username: neo
 
-# signinurl: "https://myawsaccount.signin.aws.amazon.com/console"
 aws:
   - account_name: "myawsaccount"
     notify_new_users: true
@@ -52,7 +50,7 @@ authorized_keys:
     - name: all_authorizedkeys
       # anchor to the uid map defined above
       username_map: *CUSTOMMAP1
-      ldapgroups:
+      ldap_groups:
         - sysadmins
         - developers
         - devssh
@@ -62,7 +60,7 @@ authorized_keys:
       # path: /data/puppet/modules/users/files/{env:ROOT_DIR}/.ssh/authorized_keys
 
     - name: root_authorizedkeys
-      ldapgroups:
+      ldap_groups:
         - sysadmins
       username_map: *CUSTOMMAP1
       path: /data/puppet/modules/users/files/root/.ssh/authorized_keys

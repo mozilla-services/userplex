@@ -35,56 +35,22 @@ func main() {
 	}
 	app.Commands = []cli.Command{
 		{
-			Name:  "aws",
-			Usage: "Operations within AWS",
-			Action: func(c *cli.Context) error {
-				log.Error("You must specify a subcommand")
-				return nil
-			},
+			Name:        "aws",
+			Usage:       "Operations within AWS",
+			Action:      requiresSubcommand,
 			Subcommands: createModuleSubcommands(&aws.AWSModule{}),
 		},
 		{
-			Name:  "authorizedkeys",
-			Usage: "Operations within authorizedkeys files",
-			Action: func(c *cli.Context) error {
-				log.Error("You must specify a subcommand")
-				return nil
-			},
+			Name:        "authorizedkeys",
+			Usage:       "Operations within authorizedkeys files",
+			Action:      requiresSubcommand,
 			Subcommands: createModuleSubcommands(&authorizedkeys.AuthorizedKeysModule{}),
 		},
 		{
 			Name:      "get-person",
-			Usage:     "Get Person from Person API. Useful for finding correct identifier",
+			Usage:     "Get Person from Person API. Useful for finding the correct identifier",
 			ArgsUsage: "[user-identifier]",
-			Action: func(c *cli.Context) error {
-				cfg, err := loadConf(c.GlobalString("c"))
-				if err != nil {
-					log.Fatalf("Couldn't load config: %s", err)
-				}
-
-				personClient, err := person_api.NewClient(
-					cfg.Person.PersonClientId,
-					cfg.Person.PersonClientSecret,
-					cfg.Person.PersonBaseURL,
-					cfg.Person.PersonAuth0URL,
-				)
-				if err != nil {
-					log.Fatalf("Could not create person api client: %s", err)
-				}
-				username := c.Args()[0]
-
-				p, err := getPerson(personClient, username)
-				if err != nil {
-					log.Fatalf("Could not find user %s", username)
-				}
-
-				if p.PrimaryEmail.Value == "" {
-					log.Fatalf("Could not find user %s", username)
-				}
-
-				log.Infof("%s: %+v", p.GetLDAPUsername(), p)
-				return nil
-			},
+			Action:    getPersonCmd,
 		},
 	}
 
@@ -92,6 +58,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func requiresSubcommand(c *cli.Context) error {
+	log.Error("You must specify a subcommand")
+	return nil
 }
 
 func createModuleSubcommands(module modules.Module) []cli.Command {
@@ -247,6 +218,36 @@ func loadAndVerifyContext(c *cli.Context, module modules.Module, exitOnError boo
 	}
 
 	return p, cfg, moduleConfigs, personClient
+}
+
+func getPersonCmd(c *cli.Context) error {
+	cfg, err := loadConf(c.GlobalString("c"))
+	if err != nil {
+		log.Fatalf("Couldn't load config: %s", err)
+	}
+
+	personClient, err := person_api.NewClient(
+		cfg.Person.PersonClientId,
+		cfg.Person.PersonClientSecret,
+		cfg.Person.PersonBaseURL,
+		cfg.Person.PersonAuth0URL,
+	)
+	if err != nil {
+		log.Fatalf("Could not create person api client: %s", err)
+	}
+	username := c.Args()[0]
+
+	p, err := getPerson(personClient, username)
+	if err != nil {
+		log.Fatalf("Could not find user %s", username)
+	}
+
+	if p.PrimaryEmail.Value == "" {
+		log.Fatalf("Could not find user %s", username)
+	}
+
+	log.Infof("%s: %+v", p.GetLDAPUsername(), p)
+	return nil
 }
 
 func getPerson(personClient *person_api.Client, username string) (*person_api.Person, error) {

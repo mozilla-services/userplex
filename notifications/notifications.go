@@ -80,6 +80,10 @@ Date: %s
 // encryptMailBody retrieves the PGP fingerprint of a recipient from ldap, then
 // queries the gpg server to retrieve the public key and encrypts the body with it.
 func EncryptMailBody(conf Config, origBody []byte, person *person_api.Person) ([]byte, error) {
+	if len(person.GetPGPPublicKeys()) == 0 {
+		return nil, fmt.Errorf("Person %s does not have any pgp keys.", person.GetLDAPUsername())
+	}
+
 	keyid := person.GetPGPPublicKeys()[0]
 	entity, err := getKeyFromKeyServer("gpg.mozilla.org", keyid)
 	if err != nil {
@@ -114,7 +118,11 @@ func EncryptMailBody(conf Config, origBody []byte, person *person_api.Person) ([
 		log.Errorf("Error writing armor encoded body: %s", err)
 		return nil, err
 	}
-	w.Close()
+	err = w.Close()
+	if err != nil {
+		log.Errorf("Error closing armor encoded body: %s", err)
+		return nil, err
+	}
 	body := armbuf.Bytes()
 	return body, nil
 }
@@ -132,6 +140,9 @@ func getKeyFromKeyServer(keyserver, fingerprint string) (openpgp.Entity, error) 
 	ents, err := openpgp.ReadArmoredKeyRing(resp.Body)
 	if err != nil {
 		return openpgp.Entity{}, fmt.Errorf("could not read entities: %s", err)
+	}
+	if len(ents) == 0 {
+		return openpgp.Entity{}, fmt.Errorf("no entities found")
 	}
 	return *ents[0], nil
 }
