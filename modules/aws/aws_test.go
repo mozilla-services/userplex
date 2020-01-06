@@ -11,12 +11,15 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/iam/iamiface"
+
 	"github.com/stretchr/testify/assert"
 )
 
 type mockIam struct {
 	iamiface.IAMAPI
-	guo *iam.GetUserOutput
+	getUserOutput         *iam.GetUserOutput
+	listUsersOutput       *iam.ListUsersOutput
+	getLoginProfileOutput *iam.GetLoginProfileOutput
 
 	usersCreated         int
 	accessKeysCreated    int
@@ -33,11 +36,11 @@ type mockIam struct {
 }
 
 func (m *mockIam) GetUser(*iam.GetUserInput) (*iam.GetUserOutput, error) {
-	return m.guo, nil
+	return m.getUserOutput, nil
 }
 
 func (m *mockIam) GetLoginProfile(*iam.GetLoginProfileInput) (*iam.GetLoginProfileOutput, error) {
-	return nil, nil
+	return m.getLoginProfileOutput, nil
 }
 
 func (m *mockIam) CreateAccessKey(*iam.CreateAccessKeyInput) (*iam.CreateAccessKeyOutput, error) {
@@ -109,7 +112,12 @@ func (m *mockIam) DetachUserPolicy(*iam.DetachUserPolicyInput) (*iam.DetachUserP
 	return nil, nil
 }
 
-func (m *mockIam) ListGroupsForUser(*iam.ListGroupsForUserInput) (*iam.ListGroupsForUserOutput, error) {
+func (m *mockIam) ListGroupsForUser(lgfui *iam.ListGroupsForUserInput) (*iam.ListGroupsForUserOutput, error) {
+	if *lgfui.UserName == "extra_groups" {
+		return &iam.ListGroupsForUserOutput{
+			Groups: []*iam.Group{{GroupName: aws.String("test")}, {GroupName: aws.String("extra_groups")}},
+		}, nil
+	}
 	return &iam.ListGroupsForUserOutput{
 		Groups: []*iam.Group{{GroupName: aws.String("test")}},
 	}, nil
@@ -131,7 +139,7 @@ func (m *mockIam) DeleteUser(*iam.DeleteUserInput) (*iam.DeleteUserOutput, error
 }
 
 func (m *mockIam) ListUsers(*iam.ListUsersInput) (*iam.ListUsersOutput, error) {
-	return nil, nil
+	return m.listUsersOutput, nil
 }
 
 type mockEc2 struct {
@@ -179,7 +187,7 @@ func TestCreateAlreadyExists(t *testing.T) {
 		},
 	}
 
-	iamMock := mockIam{guo: &iam.GetUserOutput{User: &iam.User{UserName: aws.String("test")}}}
+	iamMock := mockIam{getUserOutput: &iam.GetUserOutput{User: &iam.User{UserName: aws.String("test")}}}
 
 	awsm := &AWSModule{
 		BaseModule: &modules.BaseModule{},
@@ -237,7 +245,7 @@ func TestReset(t *testing.T) {
 		},
 	}
 
-	iamMock := mockIam{guo: &iam.GetUserOutput{User: &iam.User{UserName: aws.String("test")}}}
+	iamMock := mockIam{getUserOutput: &iam.GetUserOutput{User: &iam.User{UserName: aws.String("test")}}}
 
 	awsm := &AWSModule{
 		BaseModule: &modules.BaseModule{},
@@ -257,4 +265,63 @@ func TestReset(t *testing.T) {
 	assert.Equal(t, 1, iamMock.accessKeysDeleted)
 	assert.Equal(t, 1, iamMock.accessKeysCreated)
 	assert.Equal(t, 1, iamMock.loginProfilesCreated)
+}
+
+func TestVerify(t *testing.T) {
+	iamMock := mockIam{
+		listUsersOutput: &iam.ListUsersOutput{
+			Users: []*iam.User{
+				{UserName: aws.String("success")},
+				{UserName: aws.String("not_in_ldap")},
+				{UserName: aws.String("extra_groups")},
+			},
+			IsTruncated: aws.Bool(false),
+		},
+		getLoginProfileOutput: &iam.GetLoginProfileOutput{
+			LoginProfile: &iam.LoginProfile{UserName: aws.String("...")},
+		},
+	}
+
+	awsm := &AWSModule{
+		BaseModule: &modules.BaseModule{},
+		iam:        &iamMock,
+		ec2:        mockEc2{},
+		config: &modules.AWSConfiguration{
+			GroupMappings: []modules.GroupMapping{
+				{LdapGroup: "test", IamGroups: []string{"test"}},
+				{LdapGroup: "extra", IamGroups: []string{"extra"}},
+			},
+			BaseConfiguration: modules.BaseConfiguration{UsernameMap: []modules.Umap{}},
+		},
+	}
+
+	ldapUsers := []*person_api.Person{
+		{
+			UserID: person_api.StandardAttributeString{Value: "ad|Mozilla-LDAP|success"},
+			AccessInformation: person_api.AccessInformationValuesArray{
+				LDAP: person_api.LDAPAttribute{Values: map[string]interface{}{"test": nil}},
+			},
+		},
+		{
+			UserID: person_api.StandardAttributeString{Value: "ad|Mozilla-LDAP|extra_groups"},
+			AccessInformation: person_api.AccessInformationValuesArray{
+				LDAP: person_api.LDAPAttribute{Values: map[string]interface{}{"test": nil}},
+			},
+		},
+	}
+
+	verifyResults, err := awsm.verifyAWSUsers(ldapUsers)
+	assert.NoError(t, err)
+
+	assert.Len(t, verifyResults, 2)
+	for _, result := range verifyResults {
+		if result.AWSUsername == "not_in_ldap" {
+			assert.True(t, result.NotInLDAP)
+			assert.False(t, result.ExtraGroups)
+		}
+		if result.AWSUsername == "extra_groups" {
+			assert.False(t, result.NotInLDAP)
+			assert.True(t, result.ExtraGroups)
+		}
+	}
 }

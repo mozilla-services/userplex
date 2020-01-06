@@ -453,7 +453,7 @@ aws_secret_access_key = %s`,
 	} else {
 		fmt.Println("Notify new users disabled, printing output.")
 		fmt.Printf("Reset user: %s\n", username)
-		fmt.Printf("Email body: \n%s", strings.Join([]string{body, accesskey}, "\n"))
+		fmt.Printf("Email body: \n%s\n\n", strings.Join([]string{body, accesskey}, "\n"))
 		if awsm.Notifications != nil {
 			eb, err := notifications.EncryptMailBody(awsm.Notifications, []byte(strings.Join([]string{body, accesskey}, "\n")), person)
 			if err != nil {
@@ -535,7 +535,13 @@ func (awsm *AWSModule) Verify() error {
 }
 
 func (awsm *AWSModule) verifyAndPrint() ([]VerifyResult, []string, []string, error) {
-	results, err := awsm.verifyAWSUsers()
+	allLdapUsers, err := awsm.PersonClient.GetAllActiveStaff()
+	if err != nil {
+		log.Errorf("Error getting users from Person API: %s", err)
+		return nil, nil, nil, err
+	}
+
+	results, err := awsm.verifyAWSUsers(allLdapUsers)
 	if err != nil {
 		log.Errorf("Error verifying aws users: %s", err)
 		return nil, nil, nil, err
@@ -616,7 +622,7 @@ func (awsm *AWSModule) getAllAWSUsersWithConsoleAccess() ([]*iam.User, error) {
 	return iamUsers, nil
 }
 
-func (awsm *AWSModule) verifyAWSUsers() ([]VerifyResult, error) {
+func (awsm *AWSModule) verifyAWSUsers(allLdapUsers []*person_api.Person) ([]VerifyResult, error) {
 	var (
 		verifyResults []VerifyResult
 	)
@@ -625,12 +631,6 @@ func (awsm *AWSModule) verifyAWSUsers() ([]VerifyResult, error) {
 	iamUsers, err := awsm.getAllAWSUsersWithConsoleAccess()
 	if err != nil {
 		log.Errorf("Error getting users from AWS: %s", err)
-		return nil, err
-	}
-
-	allLdapUsers, err := awsm.PersonClient.GetAllActiveStaff()
-	if err != nil {
-		log.Errorf("Error getting users from Person API: %s", err)
 		return nil, err
 	}
 
