@@ -26,7 +26,7 @@ func (akm *AuthorizedKeysModule) NewFromInterface(config modules.Configuration, 
 }
 
 func New(c modules.AuthorizedKeysConfiguration, notificationsConfig notifications.Config, PersonClient *person_api.Client) *AuthorizedKeysModule {
-	akm := &AuthorizedKeysModule{config: &c, BaseModule: &modules.BaseModule{Notifications: notificationsConfig, PersonClient: PersonClient}}
+	akm := &AuthorizedKeysModule{config: &c, BaseModule: &modules.BaseModule{Notifications: &notificationsConfig, PersonClient: PersonClient}}
 	return akm
 }
 

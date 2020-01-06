@@ -12,8 +12,7 @@ install:
 	go install $(PROJECT)
 
 test:
-	go test $(PROJECT)/modules/aws
-	go test $(PROJECT)
+	./test.sh
 
 lint:
 	golint .

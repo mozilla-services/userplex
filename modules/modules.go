@@ -24,7 +24,7 @@ type Module interface {
 }
 
 type BaseModule struct {
-	Notifications notifications.Config `yaml:"notifications"`
+	Notifications *notifications.Config `yaml:"notifications"`
 	PersonClient  *person_api.Client
 }
 
@@ -53,6 +53,12 @@ type Umap struct {
 	LocalUsername string `yaml:"local_username" json:"local_username"`
 }
 
+type GroupMapping struct {
+	LdapGroup string   `yaml:"ldap_group"`
+	IamGroups []string `yaml:"iam_groups"`
+	Default   bool     `yaml:"default"`
+}
+
 type AWSConfiguration struct {
 	BaseConfiguration `yaml:",inline"`
 	AccountName       string `yaml:"account_name"`
@@ -61,11 +67,7 @@ type AWSConfiguration struct {
 		SecretKey string `yaml:"secret_key"`
 		RoleARN   string `yaml:"role_arn"`
 	} `yaml:"credentials"`
-	GroupMapping []struct {
-		LdapGroup string   `yaml:"ldap_group"`
-		IamGroups []string `yaml:"iam_groups"`
-		Default   bool     `yaml:"default"`
-	} `yaml:"group_mapping"`
+	GroupMappings []GroupMapping `yaml:"group_mapping"`
 }
 
 func (c *AWSConfiguration) Validate() error {
@@ -75,7 +77,7 @@ func (c *AWSConfiguration) Validate() error {
 
 	defaultFound := false
 	iamGroupsSet := make(map[string]bool)
-	for _, gmap := range c.GroupMapping {
+	for _, gmap := range c.GroupMappings {
 		if gmap.Default {
 			if defaultFound {
 				return fmt.Errorf("More than one 'default' group mapping found.")

@@ -12,7 +12,7 @@ require (
 	go.mozilla.org/userplex/modules/authorizedkeys v0.0.0
 	go.mozilla.org/userplex/modules/aws v0.0.0
 	go.mozilla.org/userplex/notifications v0.0.0
-	gopkg.in/yaml.v2 v2.2.2
+	gopkg.in/yaml.v2 v2.2.7
 )
 
 replace go.mozilla.org/userplex/modules/authorizedkeys => ./modules/authorizedkeys

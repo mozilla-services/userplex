@@ -25,7 +25,7 @@ type Config struct {
 	}
 }
 
-func SendEmail(conf Config, body []byte, person *person_api.Person) error {
+func SendEmail(conf *Config, body []byte, person *person_api.Person) error {
 	var err error
 	body, err = EncryptMailBody(conf, body, person)
 	if err != nil {
@@ -79,7 +79,7 @@ Date: %s
 
 // encryptMailBody retrieves the PGP fingerprint of a recipient from ldap, then
 // queries the gpg server to retrieve the public key and encrypts the body with it.
-func EncryptMailBody(conf Config, origBody []byte, person *person_api.Person) ([]byte, error) {
+func EncryptMailBody(conf *Config, origBody []byte, person *person_api.Person) ([]byte, error) {
 	if len(person.GetPGPPublicKeys()) == 0 {
 		return nil, fmt.Errorf("Person %s does not have any pgp keys.", person.GetLDAPUsername())
 	}
