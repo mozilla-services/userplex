@@ -1,23 +1,9 @@
-# Sample UserPlex configuration file
-
-# run every 15 minutes
-cron: "*/15 * * * *"
-
-ldap:
-    uri: "ldap://ldap.example.net/dc=example,dc=net"
-    username: bobkelso
-    password: donut
-    # set to false if you use self-signed certs or unknown CAs (bad!)
-    insecure: false
-    # only used if uri isn't ldaps (TLS)
-    starttls: true
-    # path to a file containing trusted root CA certificates
-    # leave blank to use the system's default
-    cacert:  ca.crt
-    # tlscert and tlskey can be used to specify a client certificate & key
-    # to connect to a ldaps server
-    tlscert: client.crt
-    tlskey:  client.key
+# Sample Userplex configuration file
+person:
+  person_client_id: "client_id"
+  person_client_secret: "client_secret"
+  person_base_url: "https://person_url.com"
+  person_auth0_url: "https://auth0.com"
 
 notifications:
     email:
@@ -34,114 +20,47 @@ notifications:
 
 # A UID map translates a ldapuid into a localuid
 mycustomawsuidmap1: &CUSTOMMAP1
-    - ldapuid: bkelso
-      localuid: bob
+  - ldap_username: bkelso
+    local_username: bob
 
-    - ldapuid: tanderson
-      localuid: neo
+  - ldap_username: tanderson
+    local_username: neo
 
-modules:
+aws:
+  - account_name: "myawsaccount"
+    notify_new_users: true
+    credentials:
+        # if blank, will use the default aws credential flow
+        accesskey: AKIAnnnn
+        secretkey: YOLOMAN
+    group_mapping:
+      - ldap_group: "sysadmins"
+        iam_groups:
+          - ldapmanaged
+          - admin
+      - ldap_group: "developers"
+        iam_groups:
+          - ldapmanaged
+          - dev_only
+      - default: true
+        iam_groups:
+          - ldapmanaged
 
-    # authorizedkeys is a module that pull the public keys of a user and
-    # writes them down into the destination
-    - name: authorizedkeys
-      ldapgroups:
+authorized_keys:
+    - name: all_authorizedkeys
+      # anchor to the uid map defined above
+      username_map: *CUSTOMMAP1
+      ldap_groups:
         - sysadmins
         - developers
         - devssh
-      create: true
-      delete: true
-      # anchor to the uid map defined above
-      uidmap: *CUSTOMMAP1
-      parameters:
-          # destination is where the public keys are written
-          # {ldap:uid} means the "uid" attribute is used to create
-          # a file for each user in the groups listed above
-          destination: /data/puppet/modules/users/files/{ldap:uid}/.ssh/authorized_keys
-          # deletionmarker is a string that tells userplex how to recognize
-          # files it manages, in order to delete them when the users are no
-          # longer present in ldap
-          deletionmarker: allsshusers
+      # {username} will be replaced with the primary username for the user being created
+      path: /data/puppet/modules/users/files/{username}/.ssh/authorized_keys
+      # {env:ROOT_DIR} will be replaced with the env var $ROOT_DIR
+      # path: /data/puppet/modules/users/files/{env:ROOT_DIR}/.ssh/authorized_keys
 
-    - name: authorizedkeys
-      ldapgroups:
+    - name: root_authorizedkeys
+      ldap_groups:
         - sysadmins
-      create: true
-      delete: false
-      uidmap: *CUSTOMMAP1
-      parameters:
-          # root is a special group that only has one authorized_keys file
-          # and all the keys of all the group members are added to it
-          destination: /data/puppet/modules/users/files/root/.ssh/authorized_keys
-
-    # aws_iam manage users in AWS
-    - name: aws
-      ldapgroups:
-        - sysadmins
-        - developers
-      # create users that exist in ldap and not in aws. also makes sure that
-      # users are assigns to their roles, even if removed manually.
-      create: true
-      # delete aws users that are in the roles but no longer in ldap
-      delete: true
-      reset: true
-      parameters:
-          # users will be added to the following IAM groups
-          iamgroups:
-            - ldapmanaged
-          # send email notifications to new users. If disabled, passwords of new
-          # users are logged in the userplex output
-          notifynewusers: true
-          # from address for notifications
-          smtpfrom: "User Operations <userops+userplex@example.net>"
-          smtprelay: "localhost:25"
-          signinurl: "https://myawsaccount.signin.aws.amazon.com/console"
-      credentials:
-          # leave these blank if your credentials are set as env variables,
-          # or if you use AWS roles (which puts STS creds in the env)
-          accesskey: AKIAnnnn
-          secretkey: YOLOMAN
-
-    # datadog invites users to datadog
-    - name: datadog
-      ldapgroups:
-        - sysadmins
-      credentials:
-          apikey: 9775a026f1ca7d1c6c5af9d94d9595a4
-          appkey: 87ce4a24youcouldntpossiblythinkthisisakey
-
-    -   name: github
-        ldapgroups:
-        -   developers
-        create: true
-        notify:
-            mode: smtp
-            recipient: '{ldap:mail}'
-        uidmap:
-        -   ldapuid: foobar
-            localuid: foo
-        credentials:
-            oauthtoken: 1982398notrealtoken
-        parameters:
-            userplexteamname: userplexed
-            organizations:
-            -   name: my-org
-                teams:
-                -   userplexed
-                -   test-team
-
-    -   name: pagerduty
-        ldapgroups:
-        -   ops
-        create: true
-        delete: true
-        notify:
-            mode: smtp
-            recipient: '{ldap:mail}'
-        parameters:
-            subdomain: ops-pd
-        credentials:
-            apikey: 018jafajkf
-        uidmap:
-        -   ldapuid: foo@bar.com
-            localuid: foobar@bar.com
+      username_map: *CUSTOMMAP1
+      path: /data/puppet/modules/users/files/root/.ssh/authorized_keys

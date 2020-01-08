@@ -1,196 +1,182 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/.
-//
-// Contributor: Julien Vehent <ulfr@mozilla.com>
-
-package authorizedkeys // import "go.mozilla.org/userplex/modules/authorizedkeys"
+package authorizedkeys
 
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"go.mozilla.org/userplex/modules"
+	"go.mozilla.org/userplex/notifications"
+
+	"go.mozilla.org/person-api"
+
+	log "github.com/sirupsen/logrus"
 )
 
-func init() {
-	modules.Register("authorizedkeys", new(module))
+type AuthorizedKeysModule struct {
+	*modules.BaseModule
+	config *modules.AuthorizedKeysConfiguration
 }
 
-type module struct {
+func (akm *AuthorizedKeysModule) NewFromInterface(config modules.Configuration, notificationsConfig notifications.Config, PersonClient *person_api.Client) modules.Module {
+	return New(config.(modules.AuthorizedKeysConfiguration), notificationsConfig, PersonClient)
 }
 
-func (m *module) NewRun(c modules.Configuration) modules.Runner {
-	r := new(run)
-	r.Conf = c
-	return r
+func New(c modules.AuthorizedKeysConfiguration, notificationsConfig notifications.Config, PersonClient *person_api.Client) *AuthorizedKeysModule {
+	akm := &AuthorizedKeysModule{config: &c, BaseModule: &modules.BaseModule{Notifications: &notificationsConfig, PersonClient: PersonClient}}
+	return akm
 }
 
-type run struct {
-	Conf modules.Configuration
-	p    parameters
+func (akm *AuthorizedKeysModule) hasAllowedGroup(person *person_api.Person) bool {
+	for group := range person.AccessInformation.LDAP.Values {
+		for _, configuredGroup := range akm.config.LdapGroups {
+			if group == configuredGroup {
+				return true
+			}
+		}
+	}
+	return false
 }
 
-type parameters struct {
-	Destination    string
-	DeletionMarker string
-}
+func (akm *AuthorizedKeysModule) Create(username string, person *person_api.Person) error {
+	if !akm.hasAllowedGroup(person) {
+		return fmt.Errorf("user %s does not have one of the allowed LDAP groups (%v)", username, akm.config.LdapGroups)
+	}
 
-func (r *run) Run() (err error) {
-	err = r.Conf.GetParameters(&r.p)
+	localUsername := akm.LDAPUsernameToLocalUsername(username, akm.config.UsernameMap)
+	dest, err := interpolate(akm.config.Path, localUsername)
 	if err != nil {
 		return err
 	}
-	users, err := r.Conf.LdapCli.GetEnabledUsersInGroups(r.Conf.LdapGroups)
+
+	log.Infof("Adding user %s to %s", localUsername, dest)
+
+	os.MkdirAll(filepath.Dir(dest), 0750)
+	destfile, err := os.OpenFile(dest, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
-		log.Fatal(err)
+		log.Errorf("can't create %q: %v", dest, err)
+		return err
 	}
-	// Gather all the uid and ssh pubkeys from ldap
-	userkeys := r.getUserKeys(users)
+	log.Infof("creating %q", dest)
 
-	// If delete is set, flush existing files that match the deletionmarker
-	// (or all files that match if no marker is defined). The files will be
-	// recreate in the next step
-	err = r.deleteMarkedFiles()
-	if err != nil {
-		return
+	scanner := bufio.NewScanner(destfile)
+	fileContents := []string{}
+	for scanner.Scan() {
+		fileContents = append(fileContents, scanner.Text())
 	}
 
-	// Open one file descriptor per destination
-	destfiles := r.openDestFiles(userkeys)
-	defer func() {
-		for dest, _ := range destfiles {
-			destfiles[dest].Close()
-		}
-	}()
-
-	// Write the pubkeys in the destfiles
-	r.writePubKeys(userkeys, destfiles)
-	return
-}
-
-func (r *run) getUserKeys(users []string) (userkeys map[string][]string) {
-	userkeys = make(map[string][]string)
-	for _, user := range users {
-		// extract the shortdn from 'mail=bob@mozilla.com,ou=people,dc=mozilla'
-		shortdn := strings.Split(user, ",")[0]
-		uid, err := r.Conf.LdapCli.GetUserId(shortdn)
-		if err != nil {
-			log.Printf("[warning] authorizedkeys: %v", err)
-			continue
-		}
-		// apply the uid map: only store the translated uid in the userkeys
-		for _, mapping := range r.Conf.UidMap {
-			if mapping.LdapUid == uid {
-				uid = mapping.LocalUID
+	keys := person.GetSSHPublicKeys()
+	sort.Strings(keys)
+	for _, key := range keys {
+		exists := false
+		for _, line := range fileContents {
+			if key == line {
+				exists = true
+				break
 			}
 		}
-		userkeys[uid], err = r.Conf.LdapCli.GetUserSSHPublicKeys(shortdn)
-		if err != nil {
-			log.Printf("[warning] authorizedkeys: %v", err)
+
+		if exists {
 			continue
 		}
-		log.Printf("[info] found %d keys for user %q", len(userkeys[uid]), uid)
 
+		// Write or append to file
+		fmt.Fprintf(destfile, "%s\n", key)
 	}
-	return
+	log.Infof("%d keys written into %q", len(keys), dest)
+
+	return destfile.Close()
 }
 
-func (r *run) deleteMarkedFiles() (err error) {
-	if !r.Conf.Delete {
-		return
+func (akm *AuthorizedKeysModule) Reset(username string, person *person_api.Person) error {
+	return fmt.Errorf("Reset not supported by Authorized Keys module.")
+}
+
+func (akm *AuthorizedKeysModule) Delete(username string) error {
+	localUsername := akm.LDAPUsernameToLocalUsername(username, akm.config.UsernameMap)
+	file, err := interpolate(akm.config.Path, localUsername)
+	if err != nil {
+		return err
 	}
-	globber := interpolate(r.p.Destination, "*")
+	log.Infof("removing %q", file)
+	err = os.Remove(file)
+	if err != nil {
+		log.Errorf("failed to remove %q: %v", file, err)
+		return err
+	}
+	return nil
+}
+
+func (akm *AuthorizedKeysModule) Sync() error {
+	return fmt.Errorf("Sync not supported by Authorized Keys module.")
+}
+
+func (akm *AuthorizedKeysModule) Verify() error {
+	badPaths, err := akm.verifyPaths()
+	if err != nil {
+		return err
+	}
+	if badPaths == nil {
+		return nil
+	}
+
+	for _, path := range badPaths {
+		fmt.Printf("%s has no matching person entry in the Person API", path)
+	}
+
+	return nil
+}
+
+func (akm *AuthorizedKeysModule) verifyPaths() ([]string, error) {
+	if !strings.Contains(akm.config.Path, "{username}") {
+		log.Warnf("Authorized Keys 'verify' does not operate on paths without '{username}'. Skipping %s", akm.config.Path)
+		return nil, nil
+	}
+
+	globber, err := interpolate(akm.config.Path, "*")
+	if err != nil {
+		return nil, err
+	}
 	files, err := filepath.Glob(globber)
 	if err != nil {
-		return
+		return nil, err
 	}
-	for _, file := range files {
-		fd, err := os.Open(file)
-		if err != nil {
-			log.Printf("[error] can't open %q for reading, skipping it", file)
-		}
-		defer fd.Close()
-		scanner := bufio.NewScanner(fd)
-		for scanner.Scan() {
-			if strings.Contains(scanner.Text(), "deletionmarker="+r.p.DeletionMarker) {
-				if !r.Conf.ApplyChanges {
-					log.Printf("[dryrun] would have deleted %q", file)
-					continue
-				}
-				log.Printf("[info] flushing %q", file)
-				err = os.Remove(file)
-				if err != nil {
-					log.Printf("[error] failed to remove %q: %v", file, err)
-				}
-				continue
-			}
-		}
+	fileMap := map[string]bool{}
+	for _, f := range files {
+		fileMap[f] = true
 	}
-	return
-}
 
-func (r *run) openDestFiles(userkeys map[string][]string) (destfiles map[string]*os.File) {
-	var err error
-	destfiles = make(map[string]*os.File)
-	for uid, _ := range userkeys {
-		dest := interpolate(r.p.Destination, uid)
-		if _, ok := destfiles[dest]; !ok {
-			if !r.Conf.ApplyChanges {
-				log.Println("[dryrun] would have created", dest)
-				continue
-			}
-			os.MkdirAll(filepath.Dir(dest), 0750)
-			destfiles[dest], err = os.Create(dest)
+	allLdapUsers, err := akm.PersonClient.GetAllActiveStaff()
+	if err != nil {
+		log.Errorf("Error getting users from Person API: %s", err)
+		return nil, err
+	}
+
+	for _, person := range allLdapUsers {
+		if akm.hasAllowedGroup(person) {
+			personPath, err := interpolate(akm.config.Path, akm.LDAPUsernameToLocalUsername(person.GetLDAPUsername(), akm.config.UsernameMap))
 			if err != nil {
-				log.Printf("[warning] can't create %q: %v", dest, err)
+				log.Errorf("Error interpolating person's (%s) file path.", person.GetLDAPUsername())
+				return nil, err
 			}
-			log.Printf("[info] creating %q", dest)
+			fileMap[personPath] = false
 		}
 	}
-	return
+
+	badPaths := []string{}
+	for filePath, notInLdap := range fileMap {
+		if !notInLdap {
+			badPaths = append(badPaths, filePath)
+		}
+	}
+
+	return badPaths, nil
 }
 
-func (r *run) writePubKeys(userkeys map[string][]string, destfiles map[string]*os.File) {
-	var uids []string
-	for uid, _ := range userkeys {
-		uids = append(uids, uid)
-	}
-	sort.Strings(uids)
-	for _, uid := range uids {
-		dest := interpolate(r.p.Destination, uid)
-		if !r.Conf.ApplyChanges {
-			log.Printf("[dryrun] would have written pubkey of %q into %q", uid, dest)
-			continue
-		}
-		marker := ""
-		if r.p.DeletionMarker != "" {
-			marker = fmt.Sprintf("; deletionmarker=%s", r.p.DeletionMarker)
-		}
-		fmt.Fprintf(destfiles[dest], "# %s LDAP pubkeys%s\n", uid, marker)
-		if len(userkeys[uid]) == 0 {
-			fmt.Fprintf(destfiles[dest], "# no key found in ldap, ask user to add one\n")
-			continue
-		}
-		var keys []string
-		for _, key := range userkeys[uid] {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			fmt.Fprintf(destfiles[dest], "%s\n", key)
-		}
-		log.Printf("[info] %d keys written into %q", len(userkeys[uid]), dest)
-	}
-	return
-}
-
-func interpolate(orig, uid string) string {
+func interpolate(orig, uid string) (string, error) {
 	prevstart := 0
 	for {
 		savedstr := orig[:prevstart]
@@ -201,23 +187,22 @@ func interpolate(orig, uid string) string {
 			break
 		}
 		comp := strings.Split(substr[start+1:stop], ":")
-		if len(comp) != 2 {
-			log.Printf("invalid interpolation format %q, expected <key>:<value>\n",
-				substr[start:stop])
-			break
+		if comp[0] != "username" && comp[0] != "env" {
+			err := fmt.Errorf("invalid interpolation variable %s, expected 'username' or 'env:<value>'", substr[start+1:stop])
+			return "", err
 		}
 		var replacement string
 		switch comp[0] {
-		case "ldap":
-			switch comp[1] {
-			case "uid":
-				replacement = uid
-			}
+		case "username":
+			replacement = uid
 		case "env":
 			replacement = os.Getenv(comp[1])
+			if replacement == "" {
+				return "", fmt.Errorf("$%s expected to be set.", comp[1])
+			}
 		}
 		orig = savedstr + substr[:start] + replacement + substr[stop+1:]
 		prevstart = stop + 1
 	}
-	return orig
+	return orig, nil
 }

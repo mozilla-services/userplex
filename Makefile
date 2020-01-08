@@ -4,19 +4,15 @@
 
 PROJECT		:= go.mozilla.org/userplex
 
-all: test vet generate userplex
+all: test vet install
 
 dev: lint cyclo all
 
-userplex:
+install:
 	go install $(PROJECT)
 
-vendor:
-	govend -u
-
 test:
-	go test $(PROJECT)/modules/aws
-	go test $(PROJECT)
+	./test.sh
 
 lint:
 	golint .
@@ -25,10 +21,31 @@ lint:
 vet:
 	go vet $(PROJECT)
 
-generate:
-	go generate
-
 cyclo:
 	gocyclo -over 15 *.go modules/
 
-.PHONY: all test clean userplex vendor
+deb-pkg: install
+	rm -rf tmppkg
+	mkdir -p tmppkg/usr/local/bin
+	cp $$GOPATH/bin/sops tmppkg/usr/local/bin/
+	fpm -C tmppkg -n sops --license MPL2.0 --vendor mozilla \
+		--description "Userplex manages users in various systems based on a LDAP-like source" \
+		-m "AJ Bahnken <ajvb@mozilla.com>" \
+		--url https://go.mozilla.org/userplex \
+		--architecture x86_64 \
+		-v "$$(git describe --abbrev=0 --tags)" \
+		-s dir -t deb .
+
+rpm-pkg: install
+	rm -rf tmppkg
+	mkdir -p tmppkg/usr/local/bin
+	cp $$GOPATH/bin/sops tmppkg/usr/local/bin/
+	fpm -C tmppkg -n sops --license MPL2.0 --vendor mozilla \
+		--description "Userplex manages users in various systems based on a LDAP-like source" \
+		-m "AJ Bahnken <ajvb@mozilla.com>" \
+		--url https://go.mozilla.org/userplex \
+		--architecture x86_64 \
+		-v "$$(git describe --abbrev=0 --tags)" \
+		-s dir -t rpm .
+
+.PHONY: all test clean install vendor

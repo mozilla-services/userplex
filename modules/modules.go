@@ -1,90 +1,118 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/.
-//
-// Contributor: Julien Vehent <ulfr@mozilla.com>
-
-package modules // import "go.mozilla.org/userplex/modules"
+package modules
 
 import (
-	"go.mozilla.org/mozldap"
-	"gopkg.in/yaml.v2"
+	"fmt"
+
+	"go.mozilla.org/person-api"
+	"go.mozilla.org/userplex/notifications"
+
+	"github.com/aws/aws-sdk-go/aws"
+	awscred "github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/iam"
 )
 
-// Configuration holds module specific parameters
-type Configuration struct {
-	Name         string         `yaml:"name" json:"name"`
-	LdapGroups   []string       `yaml:"ldapgroups" json:"ldapgroups"`
-	UidMap       []umap         `yaml:"uidmap" json:"uidmap"`
-	Create       bool           `yaml:"create" json:"create"`
-	Delete       bool           `yaml:"delete" json:"delete"`
-	Reset        bool           `yaml:"reset" json:"reset"`
-	ResetUsers   string         `yaml:"resetusers" json:"resetusers"`
-	Notify       NotifyConf     `yaml:"notify" json:"notify"`
-	Credentials  interface{}    `yaml:"credentials" json:"credentials"`
-	Parameters   interface{}    `yaml:"parameters" json:"parameters"`
-	ApplyChanges bool           `yaml:"applychanges" json:"applychanges"`
-	NotifyUsers  bool           `yaml:"notifyusers" json:"notifyusers"`
-	LdapCli      mozldap.Client `yaml:"-" json:"-"`
-	Debug        bool           `yaml:"-" json:"-"`
+type Module interface {
+	NewFromInterface(config Configuration, notificationsConfig notifications.Config, personClient *person_api.Client) Module
+	Create(username string, person *person_api.Person) error
+	Reset(username string, person *person_api.Person) error
+	Delete(username string) error
+	Sync() error
+	Verify() error
+	Notify(username, body string, person *person_api.Person) error
+	LDAPUsernameToLocalUsername(ldapUsername string, usernameMap []Umap) string
 }
 
-type NotifyConf struct {
-	Mode      string            `yaml:"mode" json:"mode"`
-	Recipient string            `yaml:"recipient" json:"recipient"`
-	Channel   chan Notification `yaml:"-" json:"-"`
+type BaseModule struct {
+	Notifications *notifications.Config `yaml:"notifications"`
+	PersonClient  *person_api.Client
 }
 
-type Notification struct {
-	Module      string
-	Recipient   string
-	Mode        string
-	Body        []byte
-	MustEncrypt bool
+func (bm *BaseModule) Notify(username, body string, person *person_api.Person) error {
+	return notifications.SendEmail(bm.Notifications, []byte(body), person)
 }
 
-type umap struct {
-	LdapUid  string `yaml:"ldapuid" json:"ldapuid"`
-	LocalUID string `yaml:"localuid" json:"localuid"`
-}
-
-// A module implements this interface
-type Moduler interface {
-	NewRun(Configuration) Runner
-}
-
-// Runner provides the interface to an execution of a module
-type Runner interface {
-	Run() error
-}
-
-// The set of registered modules
-var Available = make(map[string]Moduler)
-
-// Register a new module as available
-func Register(name string, mod Moduler) {
-	if _, exist := Available[name]; exist {
-		panic("Register: a module named " + name + " has already been registered.\nAre you trying to import the same module twice?")
+func (bm *BaseModule) LDAPUsernameToLocalUsername(ldapUsername string, usernameMap []Umap) string {
+	for _, umap := range usernameMap {
+		if umap.LdapUsername == ldapUsername {
+			return umap.LocalUsername
+		}
 	}
-	Available[name] = mod
+	return ldapUsername
 }
 
-// GetParameters reads the parameters from a Configuration into the p interface
-func (c Configuration) GetParameters(p interface{}) (err error) {
-	buf, err := yaml.Marshal(c.Parameters)
-	if err != nil {
-		return
-	}
-	err = yaml.Unmarshal(buf, p)
-	return
+type Configuration interface{}
+
+type BaseConfiguration struct {
+	NotifyNewUsers bool   `yaml:"notify_new_users"`
+	UsernameMap    []Umap `yaml:"username_map" json:"username_map"`
 }
 
-// GetCredentials reads the credentials from a Configuration into the c interface
-func (c Configuration) GetCredentials(cred interface{}) (err error) {
-	buf, err := yaml.Marshal(c.Credentials)
-	if err != nil {
-		return
+type Umap struct {
+	LdapUsername  string `yaml:"ldap_username" json:"ldap_username"`
+	LocalUsername string `yaml:"local_username" json:"local_username"`
+}
+
+type GroupMapping struct {
+	LdapGroup string   `yaml:"ldap_group"`
+	IamGroups []string `yaml:"iam_groups"`
+	Default   bool     `yaml:"default"`
+}
+
+type AWSConfiguration struct {
+	BaseConfiguration `yaml:",inline"`
+	AccountName       string `yaml:"account_name"`
+	Credentials       struct {
+		AccessKey string `yaml:"access_key"`
+		SecretKey string `yaml:"secret_key"`
+		RoleARN   string `yaml:"role_arn"`
+	} `yaml:"credentials"`
+	GroupMappings []GroupMapping `yaml:"group_mapping"`
+}
+
+func (c *AWSConfiguration) Validate() error {
+	if (c.Credentials.AccessKey != "" && c.Credentials.SecretKey != "") && c.Credentials.RoleARN != "" {
+		return fmt.Errorf("Access/Secret Key combo and Role ARN found, can only have one.")
 	}
-	err = yaml.Unmarshal(buf, cred)
-	return
+
+	defaultFound := false
+	iamGroupsSet := make(map[string]bool)
+	for _, gmap := range c.GroupMappings {
+		if gmap.Default {
+			if defaultFound {
+				return fmt.Errorf("More than one 'default' group mapping found.")
+			}
+			if gmap.LdapGroup != "" {
+				return fmt.Errorf("'default' group mapping contains an ldap group.")
+			}
+			defaultFound = true
+		}
+		for _, iamg := range gmap.IamGroups {
+			if _, v := iamGroupsSet[iamg]; !v {
+				iamGroupsSet[iamg] = true
+			}
+		}
+	}
+
+	awsconf := aws.NewConfig().WithRegion("us-east-1")
+	if c.Credentials.AccessKey != "" && c.Credentials.SecretKey != "" {
+		creds := awscred.NewStaticCredentials(c.Credentials.AccessKey, c.Credentials.SecretKey, "")
+		awsconf = awsconf.WithCredentials(creds)
+	}
+	svc := iam.New(session.New(), awsconf)
+	for iamGroup := range iamGroupsSet {
+		resp, err := svc.GetGroup(&iam.GetGroupInput{GroupName: aws.String(iamGroup)})
+		if err != nil || resp == nil {
+			return fmt.Errorf("Could now find AWS IAM Group %s: %s", iamGroup, err)
+		}
+	}
+
+	return nil
+}
+
+type AuthorizedKeysConfiguration struct {
+	BaseConfiguration `yaml:",inline"`
+	Name              string   `yaml:"name"`
+	LdapGroups        []string `yaml:"ldap_groups"`
+	Path              string   `yaml:"path"`
 }
