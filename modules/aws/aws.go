@@ -494,7 +494,7 @@ func (awsm *AWSModule) Sync() error {
 		return err
 	}
 
-	fmt.Printf("Would you like to remove these users from AWS account with name %s?\n", awsm.config.AccountName)
+	fmt.Printf("Would you like to remove these users from the %s AWS account?\n", awsm.config.AccountName)
 	for _, u := range notInLdap {
 		fmt.Printf("	* %s\n", u)
 	}

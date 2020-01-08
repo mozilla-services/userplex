@@ -1,10 +1,17 @@
+#
 # Sample Userplex configuration file
+#
+
+# Configuration for using Mozilla's Person API
+# https://github.com/mozilla-iam/cis/blob/master/docs/PersonAPI.md
 person:
   person_client_id: "client_id"
   person_client_secret: "client_secret"
   person_base_url: "https://person_url.com"
   person_auth0_url: "https://auth0.com"
 
+# Configuration for sending notifications. Will only be used
+# if the module block has `notify_new_users` set to `true`.
 notifications:
     email:
         # your smtp relay may require authentication (AWS SES does), so make
@@ -18,21 +25,30 @@ notifications:
             user: "AKIAI3TZL"
             pass: "AoXAy......"
 
-# A UID map translates a ldapuid into a localuid
-mycustomawsuidmap1: &CUSTOMMAP1
-  - ldap_username: bkelso
-    local_username: bob
 
-  - ldap_username: tanderson
-    local_username: neo
-
+# AWS Module configuration section.
+#
+# You may have multiple AWS accounts configured and all will
+# be operated on. The way to give different permissions based
+# on the account is to use the `group_mapping` to give
+# different ldap groups different AWS groups. As well, if you do
+# not have a `default` in `group_mapping`, a user without a
+# matching group will just get ignored.
 aws:
   - account_name: "myawsaccount"
     notify_new_users: true
     credentials:
         # if blank, will use the default aws credential flow
         accesskey: AKIAnnnn
-        secretkey: YOLOMAN
+        secretkey: XXXXXXX
+    # Used to translate ldap usernames into "local usernames"
+    # which will be used as the username in AWS (or which ever
+    # module they are present in)
+    username_map:
+      - ldap_username: bkelso
+        local_username: bob
+      - ldap_username: tanderson
+        local_username: neo
     group_mapping:
       - ldap_group: "sysadmins"
         iam_groups:
@@ -46,10 +62,23 @@ aws:
         iam_groups:
           - ldapmanaged
 
+# Authorized Keys Module configuration section.
+#
+# As with the AWS Module section, you can have multiple
+# authorized keys paths configured. The core
+# configuration here is the list of allowed `ldap_groups`
+# and how the `path` is setup. You can use `{username}`
+# or `{env:<ENV_VAR>}` within the path.
 authorized_keys:
     - name: all_authorizedkeys
-      # anchor to the uid map defined above
-      username_map: *CUSTOMMAP1
+      # Used to translate ldap usernames into "local usernames"
+      # which will be used as the username in authorized keys
+      # (or which ever module they are present in)
+      username_map:
+        - ldap_username: bkelso
+          local_username: bob
+        - ldap_username: tanderson
+          local_username: neo
       ldap_groups:
         - sysadmins
         - developers
@@ -62,5 +91,10 @@ authorized_keys:
     - name: root_authorizedkeys
       ldap_groups:
         - sysadmins
-      username_map: *CUSTOMMAP1
+      # Used to translate ldap usernames into "local usernames"
+      # which will be used as the username in authorized keys
+      # (or which ever module they are present in)
+      username_map:
+        - ldap_username: tanderson
+          local_username: neo
       path: /data/puppet/modules/users/files/root/.ssh/authorized_keys
