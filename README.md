@@ -14,8 +14,7 @@ Otherwise, you can get a binary from the [releases section](https://github.com/m
 
 ## Configuration
 
-You find an example configuration file in the repo at [`config.yaml`](https://github.com/mozilla-services/userplex/blob/master/config.yaml)
-
+There is an example configuration file in the repo at [`config.yaml`](https://github.com/mozilla-services/userplex/blob/master/config.yaml)
 
 ```yaml
 # Configuration for using Mozilla's Person API
@@ -168,7 +167,7 @@ GLOBAL OPTIONS:
    --help, -h  show help
 
 $ userplex -c config-encrypted.yaml aws create example-user@mozilla.com
-INFO[0001] aws "example-aws-account": user "example-user" not found, needs to be created 
+INFO[0001] aws "example-aws-account": user "example-user" not found, needs to be created
 Notify new users disabled, printing output.
 Created new user: example-user
 ....
