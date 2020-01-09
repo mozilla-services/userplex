@@ -1,6 +1,6 @@
 # Userplex [![GoDoc](https://godoc.org/go.mozilla.org/userplex?status.svg)](https://godoc.org/go.mozilla.org/userplex) [![Build Status](https://travis-ci.org/mozilla-services/userplex.svg)](https://travis-ci.org/mozilla-services/userplex)
 
-Propogate users from Mozilla's [Person API](https://github.com/mozilla-iam/cis/blob/master/docs/PersonAPI.md) to third party systems.
+Propagate users from Mozilla's [Person API](https://github.com/mozilla-iam/cis/blob/master/docs/PersonAPI.md) to third party systems.
 
 ## Installation
 
@@ -120,7 +120,7 @@ authorized_keys:
 
 ```
 NAME:
-   userplex - Propogate users from Mozilla's Person API to third part systems.
+   userplex - Propagate users from Mozilla's Person API to third party systems.
 
 USAGE:
    userplex [global options] command [command options] [arguments...]

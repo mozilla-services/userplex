@@ -19,7 +19,7 @@ const Version = "v1.0.0"
 func main() {
 	app := cli.NewApp()
 	app.Name = "userplex"
-	app.Usage = "Propogate users from Mozilla's Person API to third party systems."
+	app.Usage = "Propagate users from Mozilla's Person API to third party systems."
 	app.Version = Version
 	app.Authors = []cli.Author{
 		{Name: "AJ Bahnken", Email: "ajvb@mozilla.com"},
