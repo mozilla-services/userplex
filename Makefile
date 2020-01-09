@@ -27,9 +27,9 @@ cyclo:
 deb-pkg: install
 	rm -rf tmppkg
 	mkdir -p tmppkg/usr/local/bin
-	cp $$GOPATH/bin/sops tmppkg/usr/local/bin/
-	fpm -C tmppkg -n sops --license MPL2.0 --vendor mozilla \
-		--description "Userplex manages users in various systems based on a LDAP-like source" \
+	cp $$GOPATH/bin/userplex tmppkg/usr/local/bin/
+	fpm -C tmppkg -n userplex --license MPL2.0 --vendor mozilla \
+	  --description "Propagate users from Mozilla's Person API to third party systems." \
 		-m "AJ Bahnken <ajvb@mozilla.com>" \
 		--url https://go.mozilla.org/userplex \
 		--architecture x86_64 \
@@ -39,9 +39,9 @@ deb-pkg: install
 rpm-pkg: install
 	rm -rf tmppkg
 	mkdir -p tmppkg/usr/local/bin
-	cp $$GOPATH/bin/sops tmppkg/usr/local/bin/
-	fpm -C tmppkg -n sops --license MPL2.0 --vendor mozilla \
-		--description "Userplex manages users in various systems based on a LDAP-like source" \
+	cp $$GOPATH/bin/userplex tmppkg/usr/local/bin/
+	fpm -C tmppkg -n userplex --license MPL2.0 --vendor mozilla \
+	  --description "Propagate users from Mozilla's Person API to third party systems." \
 		-m "AJ Bahnken <ajvb@mozilla.com>" \
 		--url https://go.mozilla.org/userplex \
 		--architecture x86_64 \
