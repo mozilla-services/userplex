@@ -1,7 +1,15 @@
 language: go
-go:
-  - 1.13
+go: 1.13
 go_import_path: go.mozilla.org/userplex
+
+addons:
+  apt:
+    packages:
+      - rpm
+      - ruby
+
+before_install:
+  - gem install fpm || sudo gem install fpm
 
 script:
     - make
