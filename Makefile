@@ -3,15 +3,20 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 PROJECT		:= go.mozilla.org/userplex
+GO		:= GO111MODULE=on GOPROXY=https://proxy.golang.org go
 
 all: test vet install
 
 dev: lint cyclo all
 
 install:
-	go install $(PROJECT)
+	$(GO) install $(PROJECT)
 
-test:
+vendor:
+	$(GO) mod tidy
+	$(GO) mod vendor
+
+test: vendor
 	./test.sh
 
 lint:
@@ -19,7 +24,7 @@ lint:
 	golint modules/...
 
 vet:
-	go vet $(PROJECT)
+	$(GO) vet $(PROJECT)
 
 cyclo:
 	gocyclo -over 15 *.go modules/
