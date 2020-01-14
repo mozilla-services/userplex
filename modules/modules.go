@@ -10,6 +10,7 @@ import (
 	awscred "github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/iam"
+	log "github.com/sirupsen/logrus"
 )
 
 type Module interface {
@@ -98,12 +99,14 @@ func (c *AWSConfiguration) Validate() error {
 	if c.Credentials.AccessKey != "" && c.Credentials.SecretKey != "" {
 		creds := awscred.NewStaticCredentials(c.Credentials.AccessKey, c.Credentials.SecretKey, "")
 		awsconf = awsconf.WithCredentials(creds)
+	} else {
+		log.Info("AWS credentials not found in config, using default AWS auth flow.")
 	}
 	svc := iam.New(session.New(), awsconf)
 	for iamGroup := range iamGroupsSet {
 		resp, err := svc.GetGroup(&iam.GetGroupInput{GroupName: aws.String(iamGroup)})
 		if err != nil || resp == nil {
-			return fmt.Errorf("Could now find AWS IAM Group %s: %s", iamGroup, err)
+			return fmt.Errorf("Could not find AWS IAM Group %s: %s", iamGroup, err)
 		}
 	}
 
