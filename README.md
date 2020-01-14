@@ -54,8 +54,8 @@ aws:
     notify_new_users: true
     credentials:
         # if blank, will use the default aws credential flow
-        accesskey: AKIAnnnn
-        secretkey: XXXXXXX
+        access_key: AKIAnnnn
+        secret_key: XXXXXXX
     # Used to translate ldap usernames into "local usernames"
     # which will be used as the username in AWS (or which ever
     # module they are present in)
