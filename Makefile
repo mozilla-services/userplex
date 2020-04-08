@@ -12,6 +12,9 @@ dev: lint cyclo all
 install:
 	$(GO) install $(PROJECT)
 
+vendor:
+	$(GO) mod vendor
+
 test:
 	./test.sh
 

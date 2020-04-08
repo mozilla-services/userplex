@@ -18,6 +18,7 @@ before_deploy:
   - mkdir dist
   - make deb-pkg rpm-pkg
   - mv *.deb *.rpm dist/
+  - make vendor
   - GOOS=darwin GO111MODULE=on go build -mod vendor -o dist/userplex-${TRAVIS_TAG}.darwin go.mozilla.org/userplex
   - GOOS=windows GO111MODULE=on go build -mod vendor -o dist/userplex-${TRAVIS_TAG}.exe go.mozilla.org/userplex
   - GOOS=linux GO111MODULE=on go build -mod vendor -o dist/userplex-${TRAVIS_TAG}.linux go.mozilla.org/userplex
