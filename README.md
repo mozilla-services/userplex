@@ -52,6 +52,8 @@ notifications:
 aws:
   - account_name: "myawsaccount"
     notify_new_users: true
+    ignore_usernames:
+      - legacy_user
     credentials:
         # if blank, will use the default aws credential flow
         access_key: AKIAnnnn

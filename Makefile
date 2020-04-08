@@ -12,11 +12,7 @@ dev: lint cyclo all
 install:
 	$(GO) install $(PROJECT)
 
-vendor:
-	$(GO) mod tidy
-	$(GO) mod vendor
-
-test: vendor
+test:
 	./test.sh
 
 lint:
@@ -53,4 +49,4 @@ rpm-pkg: install
 		-v "$$(git describe --abbrev=0 --tags)" \
 		-s dir -t rpm .
 
-.PHONY: all test clean install vendor
+.PHONY: all test clean install

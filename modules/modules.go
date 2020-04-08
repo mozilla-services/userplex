@@ -62,7 +62,8 @@ type GroupMapping struct {
 
 type AWSConfiguration struct {
 	BaseConfiguration `yaml:",inline"`
-	AccountName       string `yaml:"account_name"`
+	AccountName       string   `yaml:"account_name"`
+	IgnoreUsernames   []string `yaml:"ignore_usernames"`
 	Credentials       struct {
 		AccessKey string `yaml:"access_key"`
 		SecretKey string `yaml:"secret_key"`

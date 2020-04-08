@@ -634,11 +634,24 @@ func (awsm *AWSModule) verifyAWSUsers(allLdapUsers []*person_api.Person) ([]Veri
 		return nil, err
 	}
 
+	filteredIAMUsers := []*iam.User{}
+	for _, iamUser := range iamUsers {
+		toBeIgnored := false
+		for _, username := range awsm.config.IgnoreUsernames {
+			if *iamUser.UserName == username {
+				toBeIgnored = true
+			}
+		}
+		if !toBeIgnored {
+			filteredIAMUsers = append(filteredIAMUsers, iamUser)
+		}
+	}
+
 	for _, ldapUser := range allLdapUsers {
 		ldapUsernames[awsm.LDAPUsernameToLocalUsername(ldapUser.GetLDAPUsername(), awsm.config.UsernameMap)] = ldapUser
 	}
 
-	for _, user := range iamUsers {
+	for _, user := range filteredIAMUsers {
 		inLdap := false
 		vr := VerifyResult{AWSUsername: *user.UserName}
 

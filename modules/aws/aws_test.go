@@ -272,6 +272,7 @@ func TestVerify(t *testing.T) {
 		listUsersOutput: &iam.ListUsersOutput{
 			Users: []*iam.User{
 				{UserName: aws.String("success")},
+				{UserName: aws.String("ignored")},
 				{UserName: aws.String("not_in_ldap")},
 				{UserName: aws.String("extra_groups")},
 			},
@@ -287,6 +288,7 @@ func TestVerify(t *testing.T) {
 		iam:        &iamMock,
 		ec2:        mockEc2{},
 		config: &modules.AWSConfiguration{
+			IgnoreUsernames: []string{"ignored"},
 			GroupMappings: []modules.GroupMapping{
 				{LdapGroup: "test", IamGroups: []string{"test"}},
 				{LdapGroup: "extra", IamGroups: []string{"extra"}},
