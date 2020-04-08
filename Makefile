@@ -16,7 +16,7 @@ vendor:
 	$(GO) mod vendor
 
 test:
-	./test.sh
+	go test ./...
 
 lint:
 	golint .

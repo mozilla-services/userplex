@@ -11,7 +11,7 @@ import (
 	"go.mozilla.org/userplex/modules/aws"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 const Version = "v1.0.1"
@@ -21,19 +21,19 @@ func main() {
 	app.Name = "userplex"
 	app.Usage = "Propagate users from Mozilla's Person API to third party systems."
 	app.Version = Version
-	app.Authors = []cli.Author{
+	app.Authors = []*cli.Author{
 		{Name: "AJ Bahnken", Email: "ajvb@mozilla.com"},
 		{Name: "Julien Vehent", Email: "jvehent@mozilla.com"},
 	}
 	app.EnableBashCompletion = true
 	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:   "config, c",
-			Usage:  "Path to userplex config file",
-			EnvVar: "USERPLEX_CONFIG_PATH",
+		&cli.StringFlag{
+			Name:    "config",
+			Usage:   "Path to userplex config file",
+			EnvVars: []string{"USERPLEX_CONFIG_PATH"},
 		},
 	}
-	app.Commands = []cli.Command{
+	app.Commands = []*cli.Command{
 		{
 			Name:        "aws",
 			Usage:       "Operations within AWS",
@@ -65,8 +65,8 @@ func requiresSubcommand(c *cli.Context) error {
 	return nil
 }
 
-func createModuleSubcommands(module modules.Module) []cli.Command {
-	return []cli.Command{
+func createModuleSubcommands(module modules.Module) []*cli.Command {
+	return []*cli.Command{
 		{
 			Name:      "create",
 			Usage:     "Create user",
@@ -113,7 +113,7 @@ func createModuleSubcommands(module modules.Module) []cli.Command {
 					if person != nil {
 						err = m.Delete(person.GetLDAPUsername())
 					} else {
-						err = m.Delete(c.Args()[0])
+						err = m.Delete(c.Args().Get(0))
 					}
 					if err != nil {
 						log.Errorf("Error from module.Delete: %s", err)
@@ -159,7 +159,7 @@ func createModuleSubcommands(module modules.Module) []cli.Command {
 }
 
 func loadConfigForSubcommand(c *cli.Context, module modules.Module) (conf, []modules.Configuration, *person_api.Client) {
-	cfg, err := loadConf(c.GlobalString("c"))
+	cfg, err := loadConf(c.String("config"))
 	if err != nil {
 		log.Fatalf("Couldn't load config: %s", err)
 	}
@@ -193,7 +193,7 @@ func loadConfigForSubcommand(c *cli.Context, module modules.Module) (conf, []mod
 
 func loadAndVerifyContext(c *cli.Context, module modules.Module, exitOnError bool) (*person_api.Person, conf, []modules.Configuration, *person_api.Client) {
 	cfg, moduleConfigs, personClient := loadConfigForSubcommand(c, module)
-	username := c.Args()[0]
+	username := c.Args().Get(0)
 
 	p, err := getPerson(personClient, username)
 	if err != nil {
@@ -221,7 +221,7 @@ func loadAndVerifyContext(c *cli.Context, module modules.Module, exitOnError boo
 }
 
 func getPersonCmd(c *cli.Context) error {
-	cfg, err := loadConf(c.GlobalString("c"))
+	cfg, err := loadConf(c.String("config"))
 	if err != nil {
 		log.Fatalf("Couldn't load config: %s", err)
 	}
@@ -235,7 +235,7 @@ func getPersonCmd(c *cli.Context) error {
 	if err != nil {
 		log.Fatalf("Could not create person api client: %s", err)
 	}
-	username := c.Args()[0]
+	username := c.Args().Get(0)
 
 	p, err := getPerson(personClient, username)
 	if err != nil {
