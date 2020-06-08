@@ -175,13 +175,13 @@ func loadConfigForSubcommand(c *cli.Context, module modules.Module) (conf, []mod
 	}
 
 	var moduleConfigs []modules.Configuration
-	switch module {
-	case module.(*aws.AWSModule):
+	switch module.(type) {
+	case *aws.AWSModule:
 		moduleConfigs = make([]modules.Configuration, len(cfg.Aws))
 		for i, c := range cfg.Aws {
 			moduleConfigs[i] = c
 		}
-	case module.(*authorizedkeys.AuthorizedKeysModule):
+	case *authorizedkeys.AuthorizedKeysModule:
 		moduleConfigs = make([]modules.Configuration, len(cfg.AuthorizedKeys))
 		for i, c := range cfg.AuthorizedKeys {
 			moduleConfigs[i] = c
