@@ -64,6 +64,10 @@ func New(c modules.AWSConfiguration, notificationsConfig notifications.Config, P
 	return awsm
 }
 
+func (awsm *AWSModule) ModuleName() string {
+	return awsm.config.AccountName
+}
+
 func (awsm *AWSModule) createStsSession(config *aws.Config, sess *session.Session) (*session.Session, error) {
 	stsService := sts.New(sess)
 	name := "userplex"

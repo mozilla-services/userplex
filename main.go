@@ -56,7 +56,7 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Fatal(err)
+		log.Info(err)
 	}
 }
 
@@ -77,8 +77,7 @@ func createModuleSubcommands(module modules.Module) []*cli.Command {
 					m := module.NewFromInterface(mconf, conf.Notifications, personClient)
 					err := m.Create(person.GetLDAPUsername(), person)
 					if err != nil {
-						log.Errorf("Error from module.Create: %s", err)
-						return err
+						log.Errorf("Error from module.Create for %s: %s", m.ModuleName(), err)
 					}
 				}
 				return nil
@@ -94,8 +93,7 @@ func createModuleSubcommands(module modules.Module) []*cli.Command {
 					m := module.NewFromInterface(mconf, conf.Notifications, personClient)
 					err := m.Reset(person.GetLDAPUsername(), person)
 					if err != nil {
-						log.Errorf("Error from module.Reset: %s", err)
-						return err
+						log.Errorf("Error from module.Reset for %s: %s", m.ModuleName(), err)
 					}
 				}
 				return nil
@@ -116,8 +114,7 @@ func createModuleSubcommands(module modules.Module) []*cli.Command {
 						err = m.Delete(c.Args().Get(0))
 					}
 					if err != nil {
-						log.Errorf("Error from module.Delete: %s", err)
-						return err
+						log.Errorf("Error from module.Delete for %s: %s", m.ModuleName(), err)
 					}
 				}
 				return nil
@@ -132,8 +129,7 @@ func createModuleSubcommands(module modules.Module) []*cli.Command {
 					m := module.NewFromInterface(mconf, conf.Notifications, personClient)
 					err := m.Sync()
 					if err != nil {
-						log.Errorf("Error from module.Sync: %s", err)
-						return err
+						log.Errorf("Error from module.Sync for %s: %s", m.ModuleName(), err)
 					}
 				}
 				return nil
@@ -148,8 +144,7 @@ func createModuleSubcommands(module modules.Module) []*cli.Command {
 					m := module.NewFromInterface(mconf, conf.Notifications, personClient)
 					err := m.Verify()
 					if err != nil {
-						log.Errorf("Error from module.Verify: %s", err)
-						return err
+						log.Errorf("Error from module.Verify for %s: %s", m.ModuleName(), err)
 					}
 				}
 				return nil

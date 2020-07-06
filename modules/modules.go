@@ -22,6 +22,7 @@ type Module interface {
 	Verify() error
 	Notify(username, body string, person *person_api.Person) error
 	LDAPUsernameToLocalUsername(ldapUsername string, usernameMap []Umap) string
+	ModuleName() string
 }
 
 type BaseModule struct {
