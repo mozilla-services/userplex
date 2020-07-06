@@ -30,6 +30,10 @@ func New(c modules.AuthorizedKeysConfiguration, notificationsConfig notification
 	return akm
 }
 
+func (akm *AuthorizedKeysModule) ModuleName() string {
+	return akm.config.Name
+}
+
 func (akm *AuthorizedKeysModule) hasAllowedGroup(person *person_api.Person) bool {
 	for group := range person.AccessInformation.LDAP.Values {
 		for _, configuredGroup := range akm.config.LdapGroups {
