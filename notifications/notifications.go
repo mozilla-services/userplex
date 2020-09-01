@@ -85,7 +85,7 @@ func EncryptMailBody(conf *Config, origBody []byte, person *person_api.Person) (
 	}
 
 	keyid := person.GetPGPPublicKeys()[0]
-	entity, err := getKeyFromKeyServer("gpg.mozilla.org", keyid)
+	entity, err := getKeyFromKeyServer("hkps.pool.sks-keyservers.net", keyid)
 	if err != nil {
 		log.Errorf("Error receiving key from keyserver: %s", err)
 		return nil, err
