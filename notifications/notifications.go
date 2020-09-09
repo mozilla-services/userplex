@@ -27,7 +27,7 @@ type Config struct {
 
 func SendEmail(conf *Config, body []byte, person *person_api.Person) error {
 	var err error
-	body, err = EncryptMailBody(conf, body, person)
+	body, err = EncryptMailBody(body, person)
 	if err != nil {
 		log.Errorf("failed to encrypt notification body for recipient %s: %v. Notification was not sent.", person.PrimaryEmail.Value, err)
 		return err
@@ -79,13 +79,13 @@ Date: %s
 
 // encryptMailBody retrieves the PGP fingerprint of a recipient from ldap, then
 // queries the gpg server to retrieve the public key and encrypts the body with it.
-func EncryptMailBody(conf *Config, origBody []byte, person *person_api.Person) ([]byte, error) {
+func EncryptMailBody(origBody []byte, person *person_api.Person) ([]byte, error) {
 	if len(person.GetPGPPublicKeys()) == 0 {
 		return nil, fmt.Errorf("Person %s does not have any pgp keys.", person.GetLDAPUsername())
 	}
 
 	keyid := person.GetPGPPublicKeys()[0]
-	entity, err := getKeyFromKeyServer("hkps.pool.sks-keyservers.net", keyid)
+	entity, err := getKeyFromKeyServer(keyid)
 	if err != nil {
 		log.Errorf("Error receiving key from keyserver: %s", err)
 		return nil, err
@@ -127,8 +127,8 @@ func EncryptMailBody(conf *Config, origBody []byte, person *person_api.Person) (
 	return body, nil
 }
 
-func getKeyFromKeyServer(keyserver, fingerprint string) (openpgp.Entity, error) {
-	url := fmt.Sprintf("https://%s/pks/lookup?op=get&options=mr&search=%s", keyserver, fingerprint)
+func getKeyFromKeyServer(fingerprint string) (openpgp.Entity, error) {
+	url := fmt.Sprintf("https://keys.openpgp.org/vks/v1/by-fingerprint/%s", fingerprint)
 	resp, err := http.Get(url)
 	if err != nil {
 		return openpgp.Entity{}, fmt.Errorf("error getting key from keyserver: %s", err)
@@ -140,9 +140,6 @@ func getKeyFromKeyServer(keyserver, fingerprint string) (openpgp.Entity, error) 
 	ents, err := openpgp.ReadArmoredKeyRing(resp.Body)
 	if err != nil {
 		return openpgp.Entity{}, fmt.Errorf("could not read entities: %s", err)
-	}
-	if len(ents) == 0 {
-		return openpgp.Entity{}, fmt.Errorf("no entities found")
 	}
 	return *ents[0], nil
 }
