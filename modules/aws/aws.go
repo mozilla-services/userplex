@@ -196,7 +196,7 @@ aws_secret_access_key = %s`,
 		fmt.Printf("Created new user: %s\n", username)
 		fmt.Printf("Email body: \n%s\n\n", strings.Join([]string{body, accessKeyText, sshKeyText}, "\n"))
 		if awsm.Notifications != nil {
-			eb, err := notifications.EncryptMailBody(awsm.Notifications, []byte(strings.Join([]string{body, accessKeyText, sshKeyText}, "\n")), person)
+			eb, err := notifications.EncryptMailBody([]byte(strings.Join([]string{body, accessKeyText, sshKeyText}, "\n")), person)
 			if err != nil {
 				log.Errorf("Error encrypted email body: %s", err)
 				return err
@@ -459,7 +459,7 @@ aws_secret_access_key = %s`,
 		fmt.Printf("Reset user: %s\n", username)
 		fmt.Printf("Email body: \n%s\n\n", strings.Join([]string{body, accesskey}, "\n"))
 		if awsm.Notifications != nil {
-			eb, err := notifications.EncryptMailBody(awsm.Notifications, []byte(strings.Join([]string{body, accesskey}, "\n")), person)
+			eb, err := notifications.EncryptMailBody([]byte(strings.Join([]string{body, accesskey}, "\n")), person)
 			if err != nil {
 				log.Errorf("Error encrypted email body: %s", err)
 				return err
