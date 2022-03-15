@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"go.mozilla.org/person-api"
+	person_api "go.mozilla.org/person-api"
 
 	"go.mozilla.org/userplex/modules"
 	"go.mozilla.org/userplex/notifications"
@@ -190,13 +190,18 @@ aws_secret_access_key = %s`,
 	}
 
 	if awsm.config.NotifyNewUsers {
-		return awsm.Notify(username, strings.Join([]string{body, accessKeyText, sshKeyText}, "\n"), person)
+		return awsm.Notify(username, strings.Join([]string{body, accessKeyText, sshKeyText}, "\n"), person, awsm.config.NotifyUsePgp)
 	} else {
+		var eb []byte
 		fmt.Println("Notify new users disabled, printing output.")
 		fmt.Printf("Created new user: %s\n", username)
 		fmt.Printf("Email body: \n%s\n\n", strings.Join([]string{body, accessKeyText, sshKeyText}, "\n"))
 		if awsm.Notifications != nil {
-			eb, err := notifications.EncryptMailBody([]byte(strings.Join([]string{body, accessKeyText, sshKeyText}, "\n")), person)
+			if awsm.config.NotifyUsePgp {
+				eb, err = notifications.EncryptMailBody([]byte(strings.Join([]string{body, accessKeyText, sshKeyText}, "\n")), person)
+			} else {
+				eb, err = notifications.AgeEncryptMailBody([]byte(strings.Join([]string{body, accessKeyText, sshKeyText}, "\n")), person)
+			}
 			if err != nil {
 				log.Errorf("Error encrypted email body: %s", err)
 				return err
@@ -453,13 +458,18 @@ aws_secret_access_key = %s`,
 		*createAccessKeyResp.AccessKey.SecretAccessKey)
 
 	if awsm.config.NotifyNewUsers {
-		return awsm.Notify(username, strings.Join([]string{body, accesskey}, "\n"), person)
+		return awsm.Notify(username, strings.Join([]string{body, accesskey}, "\n"), person, awsm.config.NotifyUsePgp)
 	} else {
+		var eb []byte
 		fmt.Println("Notify new users disabled, printing output.")
 		fmt.Printf("Reset user: %s\n", username)
 		fmt.Printf("Email body: \n%s\n\n", strings.Join([]string{body, accesskey}, "\n"))
 		if awsm.Notifications != nil {
-			eb, err := notifications.EncryptMailBody([]byte(strings.Join([]string{body, accesskey}, "\n")), person)
+			if awsm.config.NotifyUsePgp {
+				eb, err = notifications.EncryptMailBody([]byte(strings.Join([]string{body, accesskey}, "\n")), person)
+			} else {
+				eb, err = notifications.AgeEncryptMailBody([]byte(strings.Join([]string{body, accesskey}, "\n")), person)
+			}
 			if err != nil {
 				log.Errorf("Error encrypted email body: %s", err)
 				return err

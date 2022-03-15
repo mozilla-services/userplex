@@ -3,7 +3,7 @@ package modules
 import (
 	"fmt"
 
-	"go.mozilla.org/person-api"
+	person_api "go.mozilla.org/person-api"
 	"go.mozilla.org/userplex/notifications"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -20,7 +20,7 @@ type Module interface {
 	Delete(username string) error
 	Sync() error
 	Verify() error
-	Notify(username, body string, person *person_api.Person) error
+	Notify(username, body string, person *person_api.Person, usePgp bool) error
 	LDAPUsernameToLocalUsername(ldapUsername string, usernameMap []Umap) string
 	ModuleName() string
 }
@@ -30,8 +30,8 @@ type BaseModule struct {
 	PersonClient  *person_api.Client
 }
 
-func (bm *BaseModule) Notify(username, body string, person *person_api.Person) error {
-	return notifications.SendEmail(bm.Notifications, []byte(body), person)
+func (bm *BaseModule) Notify(username, body string, person *person_api.Person, usePgp bool) error {
+	return notifications.SendEmail(bm.Notifications, []byte(body), person, usePgp)
 }
 
 func (bm *BaseModule) LDAPUsernameToLocalUsername(ldapUsername string, usernameMap []Umap) string {
@@ -47,6 +47,7 @@ type Configuration interface{}
 
 type BaseConfiguration struct {
 	NotifyNewUsers bool   `yaml:"notify_new_users"`
+	NotifyUsePgp   bool   `yaml:"notify_use_pgp"`
 	UsernameMap    []Umap `yaml:"username_map" json:"username_map"`
 }
 
