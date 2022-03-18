@@ -7,7 +7,11 @@ import (
 	"net/smtp"
 	"time"
 
-	"go.mozilla.org/person-api"
+	person_api "go.mozilla.org/person-api"
+
+	"filippo.io/age"
+	"filippo.io/age/agessh"
+	agearmor "filippo.io/age/armor"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/openpgp"
@@ -25,12 +29,46 @@ type Config struct {
 	}
 }
 
-func SendEmail(conf *Config, body []byte, person *person_api.Person) error {
+func SendEmail(conf *Config, body []byte, person *person_api.Person, usePgp bool) error {
 	var err error
-	body, err = EncryptMailBody(body, person)
-	if err != nil {
-		log.Errorf("failed to encrypt notification body for recipient %s: %v. Notification was not sent.", person.PrimaryEmail.Value, err)
-		return err
+	var encbody []byte
+	prefix := ""
+
+	if usePgp {
+		encbody, err = EncryptMailBody(body, person)
+		if err != nil {
+			log.Errorf("failed to encrypt notification body for recipient %s: %v. Notification was not sent.", person.PrimaryEmail.Value, err)
+			return err
+		}
+		// If the body is encrypted PGP, put it inside a MIME enveloppe
+		if len(encbody) > 30 && fmt.Sprintf("%s", encbody[0:27]) == "-----BEGIN PGP MESSAGE-----" {
+			prefix = `
+	This message contains PGP encrypted data. If your email agent does
+	not automatically decrypt it, you can do so manually by saving the
+	PGP block below to a file and decrypting it with "gpg -d file.asc".
+	`
+		} else {
+			return fmt.Errorf("notification body for recipient %s is malformed.", person.PrimaryEmail.Value)
+		}
+	} else {
+		encbody, err = AgeEncryptMailBody(body, person)
+		if err != nil {
+			log.Errorf("failed to encrypt notification body for recipient %s: %v. Notification was not sent.", person.PrimaryEmail.Value, err)
+			return err
+		}
+		// If the body is age encrypted, put it inside a MIME enveloppe
+		if len(encbody) > 34 && fmt.Sprintf("%s", encbody[0:34]) == "-----BEGIN AGE ENCRYPTED FILE-----" {
+			prefix = `
+	This message contains age encrypted data using the ssh key from phonebook.
+	It can be decrypted by saving the block below to a file and decrypting it with
+	"age --decrypt -i your_ssh_key encrypted_data.age > decrypted_data"
+
+	More info, including install instructions can be found here:
+	https://github.com/FiloSottile/age
+	`
+		} else {
+			return fmt.Errorf("notification body for recipient %s is malformed.", person.PrimaryEmail.Value)
+		}
 	}
 
 	var auth smtp.Auth
@@ -38,15 +76,6 @@ func SendEmail(conf *Config, body []byte, person *person_api.Person) error {
 		auth = smtp.PlainAuth("", conf.Email.Auth.User, conf.Email.Auth.Pass, conf.Email.Host)
 	}
 
-	// If the body is encrypted PGP, put it inside a MIME enveloppe
-	prefix := ""
-	if len(body) > 30 && fmt.Sprintf("%s", body[0:27]) == "-----BEGIN PGP MESSAGE-----" {
-		prefix = `
-This message contains PGP encrypted data. If your email agent does
-not automatically decrypt it, you can do so manually by saving the
-PGP block below to a file and decrypting it with "gpg -d file.asc".
-`
-	}
 	err = smtp.SendMail(
 		fmt.Sprintf("%s:%d", conf.Email.Host, conf.Email.Port),
 		auth,
@@ -69,7 +98,7 @@ Date: %s
 			conf.Email.Subject,
 			time.Now().Format("Mon, 2 Jan 2006 15:04:05 -0700"),
 			prefix,
-			body)),
+			encbody)),
 	)
 	if err != nil {
 		return err
@@ -142,4 +171,53 @@ func getKeyFromKeyServer(fingerprint string) (openpgp.Entity, error) {
 		return openpgp.Entity{}, fmt.Errorf("could not read entities: %s", err)
 	}
 	return *ents[0], nil
+}
+
+// AgeEncryptMailBody retrieves the ssh key of a recipient from ldap, then
+// encrypts the body with it using age.
+func AgeEncryptMailBody(origBody []byte, person *person_api.Person) ([]byte, error) {
+	keys := person.GetSSHPublicKeys()
+
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("Person %s does not have any ssh keys.", person.GetLDAPUsername())
+	}
+
+	// use first ssh key found
+	recipient, err := agessh.ParseRecipient(keys[0])
+	if err != nil {
+		log.Errorf("Error parsing public key: %s: %s", keys[0], err)
+		return nil, err
+	}
+
+	encbuf := new(bytes.Buffer)
+	w, err := age.Encrypt(encbuf, recipient)
+	if err != nil {
+		log.Errorf("Error encrypted mail body: %s", err)
+		return nil, err
+	}
+	_, err = w.Write([]byte(origBody))
+	if err != nil {
+		log.Errorf("Error writing original body to encrypted writer: %s", err)
+		return nil, err
+	}
+	err = w.Close()
+	if err != nil {
+		log.Errorf("Error closing encrypted writer: %s", err)
+		return nil, err
+	}
+	armbuf := bytes.NewBuffer(nil)
+	w = agearmor.NewWriter(armbuf)
+
+	_, err = w.Write(encbuf.Bytes())
+	if err != nil {
+		log.Errorf("Error writing armor encoded body: %s", err)
+		return nil, err
+	}
+	err = w.Close()
+	if err != nil {
+		log.Errorf("Error closing armor encoded body: %s", err)
+		return nil, err
+	}
+	body := armbuf.Bytes()
+	return body, nil
 }
