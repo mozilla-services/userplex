@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"go.mozilla.org/person-api"
+	person_api "go.mozilla.org/person-api"
 	"go.mozilla.org/userplex/modules"
 	"go.mozilla.org/userplex/modules/authorizedkeys"
 	"go.mozilla.org/userplex/modules/aws"
@@ -14,7 +14,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const Version = "v1.0.4"
+const Version = "v1.0.5"
 
 func main() {
 	app := cli.NewApp()
